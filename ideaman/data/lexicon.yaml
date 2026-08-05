@@ -1,0 +1,149 @@
+# IDEAMAN 語彙プール
+#
+# 各語は `term` と `domains`（分野タグ）を持つ。combinator は domains の
+# 重なりが少ない組を優先することで、普段結びつかない衝突を作り出す。
+# domains が空の語はどの分野とも衝突しうる「自由な語」として扱われる。
+
+concepts:
+  - {term: 手紙, domains: [communication, analog]}
+  - {term: 地図, domains: [space, information]}
+  - {term: 影, domains: [physical, art]}
+  - {term: 待ち時間, domains: [time, ux]}
+  - {term: 忘却, domains: [memory, mind]}
+  - {term: 台所, domains: [daily, space]}
+  - {term: 改札, domains: [city, system]}
+  - {term: 雨音, domains: [nature, sound]}
+  - {term: 図書館, domains: [knowledge, space]}
+  - {term: 名前, domains: [identity, language]}
+  - {term: 行列, domains: [city, system]}
+  - {term: 温度, domains: [physical, sense]}
+  - {term: 賞味期限, domains: [time, daily]}
+  - {term: 集合写真, domains: [memory, social]}
+  - {term: 迷子, domains: [space, emotion]}
+  - {term: 目次, domains: [information, structure]}
+  - {term: 独り言, domains: [mind, sound]}
+  - {term: 折り目, domains: [physical, analog]}
+  - {term: 通知, domains: [ux, communication]}
+  - {term: 待合室, domains: [space, time]}
+  - {term: 方言, domains: [language, culture]}
+  - {term: 引き出し, domains: [daily, structure]}
+  - {term: 潮の満ち引き, domains: [nature, time]}
+  - {term: 落書き, domains: [art, play]}
+  - {term: 定食屋, domains: [daily, culture]}
+  - {term: 補助輪, domains: [learning, physical]}
+  - {term: 交差点, domains: [city, space]}
+  - {term: 訃報, domains: [social, emotion]}
+  - {term: 星座, domains: [nature, story]}
+  - {term: 靴紐, domains: [daily, physical]}
+  - {term: 予報, domains: [time, information]}
+  - {term: 相槌, domains: [communication, social]}
+  - {term: 廃線, domains: [city, memory]}
+  - {term: 味噌汁, domains: [daily, culture]}
+  - {term: 索引, domains: [knowledge, structure]}
+  - {term: 停電, domains: [system, emotion]}
+  - {term: 遠回り, domains: [space, play]}
+  - {term: 声変わり, domains: [identity, sound]}
+  - {term: 実家, domains: [memory, space]}
+  - {term: 借り物, domains: [social, economy]}
+  - {term: 早送り, domains: [time, ux]}
+  - {term: 苔, domains: [nature, time]}
+  - {term: 合鍵, domains: [trust, physical]}
+  - {term: 給水塔, domains: [city, system]}
+  - {term: 寝言, domains: [mind, sound]}
+  - {term: 端数, domains: [economy, structure]}
+  - {term: 手癖, domains: [identity, learning]}
+  - {term: 校歌, domains: [culture, memory]}
+  - {term: 発酵, domains: [nature, time]}
+  - {term: 非常口, domains: [system, space]}
+  - {term: 折り返し地点, domains: [time, structure]}
+  - {term: 常連, domains: [social, daily]}
+  - {term: 見出し, domains: [information, language]}
+  - {term: 湯気, domains: [physical, sense]}
+  - {term: 番号札, domains: [system, social]}
+  - {term: 下書き, domains: [creation, structure]}
+  - {term: 空き家, domains: [city, memory]}
+  - {term: 口約束, domains: [trust, communication]}
+  - {term: 目覚まし, domains: [time, daily]}
+  - {term: 相部屋, domains: [social, space]}
+  - {term: 雑音, domains: [sound, information]}
+  - {term: 引っ越し, domains: [space, emotion]}
+  - {term: 献立, domains: [daily, structure]}
+  - {term: 匿名, domains: [identity, trust]}
+  - {term: 年輪, domains: [nature, memory]}
+  - {term: 中古品, domains: [economy, memory]}
+  - {term: 待ち合わせ, domains: [social, space]}
+  - {term: 静電気, domains: [physical, sense]}
+  - {term: 敬語, domains: [language, social]}
+
+operations:
+  - {term: 反転させる, domains: [structure]}
+  - {term: 半分に削る, domains: [structure]}
+  - {term: 逆順で始める, domains: [time, structure]}
+  - {term: 誰か他人に委ねる, domains: [social]}
+  - {term: 一切見えなくする, domains: [sense]}
+  - {term: 一度だけ許す, domains: [rule]}
+  - {term: 十年後に届ける, domains: [time]}
+  - {term: 音だけで表す, domains: [sense, sound]}
+  - {term: わざと失敗させる, domains: [play, rule]}
+  - {term: 全部公開する, domains: [trust, social]}
+  - {term: 数を数えるのをやめる, domains: [rule, information]}
+  - {term: 引き継げるようにする, domains: [social, time]}
+  - {term: 使い捨てにする, domains: [economy, rule]}
+  - {term: 自動で忘れさせる, domains: [memory, rule]}
+  - {term: 二人でないと動かなくする, domains: [social, rule]}
+  - {term: 遅延させる, domains: [time, ux]}
+  - {term: 手で触れるようにする, domains: [physical, sense]}
+  - {term: 増殖させる, domains: [structure]}
+  - {term: 一行だけにする, domains: [structure, language]}
+  - {term: 場所に縛りつける, domains: [space, rule]}
+  - {term: 天気に連動させる, domains: [nature, system]}
+  - {term: 順番待ちを可視化する, domains: [system, ux]}
+  - {term: 主役と脇役を入れ替える, domains: [story, structure]}
+  - {term: 未完成のまま渡す, domains: [creation, social]}
+  - {term: 声に出させる, domains: [sound, social]}
+  - {term: 毎回違う姿にする, domains: [identity, play]}
+  - {term: 誰のものでもなくする, domains: [economy, trust]}
+  - {term: 途中から参加できるようにする, domains: [time, social]}
+
+constraints:
+  - {term: 十秒以内で, domains: [time]}
+  - {term: 一人きりで, domains: [social]}
+  - {term: 声だけで, domains: [sound, sense]}
+  - {term: 予算ゼロで, domains: [economy]}
+  - {term: 紙の上だけで, domains: [analog, physical]}
+  - {term: 文字を使わずに, domains: [language]}
+  - {term: 一日一回しか, domains: [time, rule]}
+  - {term: 見知らぬ人と, domains: [social, trust]}
+  - {term: 説明書なしで, domains: [ux, learning]}
+  - {term: 夜のあいだだけ, domains: [time]}
+  - {term: 三つの部品だけで, domains: [structure]}
+  - {term: 元に戻せない形で, domains: [rule, time]}
+  - {term: 誰にも見られずに, domains: [trust, identity]}
+  - {term: 立ったままで, domains: [physical]}
+  - {term: 雨の日に限って, domains: [nature, time]}
+  - {term: 電気を使わずに, domains: [physical, economy]}
+  - {term: 十年続く前提で, domains: [time]}
+  - {term: 子どもにも分かる形で, domains: [learning, language]}
+  - {term: 手放すことを前提に, domains: [economy, emotion]}
+
+provocations:
+  - {term: それは本当に必要か, domains: [rule]}
+  - {term: 誰も損をしないか, domains: [social, economy]}
+  - {term: 逆に不便にしたらどうなるか, domains: [ux, play]}
+  - {term: 百年前ならどうしていたか, domains: [time, culture]}
+  - {term: 失われたら誰が困るか, domains: [social, emotion]}
+  - {term: なぜ今まで誰もやらなかったのか, domains: [creation]}
+  - {term: 最初の一人はどう始めるか, domains: [social, learning]}
+  - {term: 途中でやめたらどうなるか, domains: [time, rule]}
+  - {term: それを嫌う人は何を守っているのか, domains: [social, emotion]}
+  - {term: 数えられないものは何か, domains: [information, mind]}
+  - {term: 静かにやる方法はあるか, domains: [sound, social]}
+  - {term: 一番安い版はどんな形か, domains: [economy, structure]}
+
+moods:
+  - 静穏
+  - 挑発
+  - 郷愁
+  - 実務
+  - 夢想
+  - 逆説

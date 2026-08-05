@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IDEAMAN</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --fg: #e8e4dc;
+    --dim: #7b8290;
+    --line: #262a31;
+    --accent: #c2a06a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1.25rem 4rem;
+  }
+  header { text-align: center; margin-bottom: 2.5rem; }
+  h1 { font-size: 1rem; letter-spacing: 0.6em; font-weight: 400; margin: 0 0 .5rem; color: var(--dim); }
+  #stock { font-size: .8rem; color: var(--dim); min-height: 1.2em; }
+
+  main { width: 100%; max-width: 34rem; text-align: center; }
+
+  #idea {
+    min-height: 7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    line-height: 2;
+    opacity: 0;
+    transition: opacity .9s ease;
+  }
+  #idea.visible { opacity: 1; }
+  #idea.thinking { opacity: .35; font-size: 1rem; letter-spacing: .4em; color: var(--dim); }
+
+  #summon {
+    margin-top: 2rem;
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--fg);
+    font-family: inherit;
+    font-size: .95rem;
+    letter-spacing: .3em;
+    padding: 1rem 2.5rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color .3s, color .3s;
+  }
+  #summon:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  #summon:disabled { opacity: .4; cursor: default; }
+
+  #rate { margin-top: 1.75rem; display: none; }
+  #rate.visible { display: block; }
+  .vote {
+    background: none; border: 1px solid var(--line); color: var(--dim);
+    font-size: 1.1rem; padding: .4rem .9rem; margin: 0 .3rem;
+    border-radius: 6px; cursor: pointer; transition: border-color .2s, color .2s;
+  }
+  .vote:hover { border-color: var(--accent); color: var(--accent); }
+  .vote.chosen { border-color: var(--accent); color: var(--accent); }
+  #note {
+    display: block; width: 100%; margin: .9rem auto 0;
+    background: transparent; border: none; border-bottom: 1px solid var(--line);
+    color: var(--fg); font-family: inherit; font-size: .85rem;
+    padding: .4rem .2rem; text-align: center; outline: none;
+  }
+  #note:focus { border-bottom-color: var(--accent); }
+  #note::placeholder { color: var(--line); }
+
+  section#archive { width: 100%; max-width: 34rem; margin-top: 4rem; }
+  #archive h2 {
+    font-size: .75rem; font-weight: 400; letter-spacing: .4em; color: var(--dim);
+    border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin: 0 0 .5rem;
+    cursor: pointer;
+  }
+  #archive ol { list-style: none; margin: 0; padding: 0; }
+  #archive li {
+    padding: .9rem .2rem; border-bottom: 1px solid var(--line);
+    font-size: .9rem; line-height: 1.9; display: flex; gap: .8rem;
+  }
+  .score { color: var(--dim); font-size: .75rem; flex-shrink: 0; padding-top: .35rem; }
+  .score.up { color: var(--accent); }
+  #archive.collapsed ol { display: none; }
+  #empty { color: var(--line); font-size: .85rem; padding: 1rem .2rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>IDEAMAN</h1>
+  <div id="stock"></div>
+</header>
+
+<main>
+  <div id="idea"></div>
+  <button id="summon">受け取る</button>
+  <div id="rate">
+    <button class="vote" data-score="1" title="良い">&#128077;</button>
+    <button class="vote" data-score="-1" title="そうでもない">&#128078;</button>
+    <input id="note" type="text" placeholder="ひとこと残す（任意）" maxlength="500">
+  </div>
+</main>
+
+<section id="archive" class="collapsed">
+  <h2 id="archive-toggle">これまでの考え</h2>
+  <ol id="archive-list"></ol>
+</section>
+
+<script>
+const el = (id) => document.getElementById(id);
+const ideaEl = el("idea"), summonEl = el("summon"), rateEl = el("rate"),
+      noteEl = el("note"), stockEl = el("stock"), archiveEl = el("archive");
+let current = null;
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function refreshStock() {
+  try {
+    const { count } = await api("/api/stock");
+    stockEl.textContent = count > 0 ? `${count} 個の考えが溜まっている` : "";
+  } catch { stockEl.textContent = ""; }
+}
+
+// 押した瞬間に出すと自販機になる。少しの「間」が天啓の条件。
+const pause = () => new Promise(r => setTimeout(r, 300 + Math.random() * 500));
+
+async function summon() {
+  summonEl.disabled = true;
+  rateEl.classList.remove("visible");
+  ideaEl.className = "thinking visible";
+  ideaEl.textContent = "・・・";
+
+  try {
+    const [idea] = await Promise.all([api("/api/idea", { method: "POST" }), pause()]);
+    current = idea;
+    ideaEl.className = "";
+    // 一度透明にしてから戻すことで、次のアイデアが「現れる」ように見せる
+    requestAnimationFrame(() => {
+      ideaEl.textContent = idea.text;
+      ideaEl.classList.add("visible");
+    });
+    noteEl.value = "";
+    document.querySelectorAll(".vote").forEach(b => b.classList.remove("chosen"));
+    rateEl.classList.add("visible");
+    summonEl.textContent = "もう一度";
+    refreshStock();
+    loadArchive();
+  } catch (e) {
+    ideaEl.className = "visible";
+    ideaEl.textContent = "うまく考えられなかった。";
+    console.error(e);
+  } finally {
+    summonEl.disabled = false;
+  }
+}
+
+async function vote(button) {
+  if (!current) return;
+  document.querySelectorAll(".vote").forEach(b => b.classList.remove("chosen"));
+  button.classList.add("chosen");
+  try {
+    await api(`/api/idea/${current.id}/rate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        score: Number(button.dataset.score),
+        note: noteEl.value.trim() || null,
+      }),
+    });
+    loadArchive();
+  } catch (e) { console.error(e); }
+}
+
+async function loadArchive() {
+  try {
+    const { ideas } = await api("/api/ideas?limit=50");
+    const list = el("archive-list");
+    list.innerHTML = "";
+    if (!ideas.length) {
+      list.innerHTML = '<li id="empty">まだ何もない。</li>';
+      return;
+    }
+    for (const idea of ideas) {
+      const li = document.createElement("li");
+      const score = document.createElement("span");
+      score.className = "score" + (idea.score > 0 ? " up" : "");
+      score.textContent = idea.score > 0 ? `+${idea.score}` : (idea.score || "");
+      const text = document.createElement("span");
+      text.textContent = idea.text;
+      li.append(score, text);
+      list.appendChild(li);
+    }
+  } catch (e) { console.error(e); }
+}
+
+summonEl.addEventListener("click", summon);
+document.querySelectorAll(".vote").forEach(b =>
+  b.addEventListener("click", () => vote(b)));
+el("archive-toggle").addEventListener("click", () =>
+  archiveEl.classList.toggle("collapsed"));
+
+refreshStock();
+loadArchive();
+</script>
+</body>
+</html>

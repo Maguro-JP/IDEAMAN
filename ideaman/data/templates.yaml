@@ -1,0 +1,68 @@
+# アイデアの文型。
+#
+# 使えるプレースホルダ:
+#   {concept_a} {concept_b} {operation} {constraint} {provocation}
+#
+# tone:
+#   oracle   … 天啓・お告げ寄り。断定的で、説明しない。
+#   proposal … 提案寄り。手を動かせる具体性がある。
+#   question … 問いだけを置く。答えは書かない。
+#
+# 各テンプレは needs で必要なプレースホルダを宣言する。combinator は
+# needs に含まれる語だけを抽選するので、テンプレを足すときは needs も更新すること。
+
+templates:
+  - id: oracle_collision
+    tone: oracle
+    needs: [concept_a, concept_b]
+    text: "{concept_a}は、{concept_b}のかたちをしている。"
+
+  - id: oracle_operation
+    tone: oracle
+    needs: [concept_a, operation]
+    text: "{concept_a}を{operation}。それだけでいい。"
+
+  - id: oracle_constraint
+    tone: oracle
+    needs: [concept_a, constraint]
+    text: "{constraint}{concept_a}に触れたとき、何かが変わる。"
+
+  - id: oracle_pair_rule
+    tone: oracle
+    needs: [concept_a, concept_b, operation]
+    text: "{concept_a}と{concept_b}のあいだにあるものを{operation}。"
+
+  - id: proposal_basic
+    tone: proposal
+    needs: [concept_a, operation, constraint]
+    text: "{concept_a}を{constraint}{operation}——そういうものを作ってみる。"
+
+  - id: proposal_mashup
+    tone: proposal
+    needs: [concept_a, concept_b, constraint]
+    text: "{concept_a}の仕組みを{concept_b}に持ち込む。ただし{constraint}。"
+
+  - id: proposal_invert
+    tone: proposal
+    needs: [concept_a, operation]
+    text: "誰もが当然だと思っている{concept_a}の部分を{operation}としたら、何が残るだろう。"
+
+  - id: proposal_service
+    tone: proposal
+    needs: [concept_a, concept_b, operation]
+    text: "{concept_a}のための{concept_b}。核になるのは「{operation}」という一点だけ。"
+
+  - id: question_plain
+    tone: question
+    needs: [concept_a, provocation]
+    text: "{concept_a}について——{provocation}。"
+
+  - id: question_pair
+    tone: question
+    needs: [concept_a, concept_b, provocation]
+    text: "{concept_a}と{concept_b}を並べて置いてみる。{provocation}。"
+
+  - id: question_constrained
+    tone: question
+    needs: [concept_a, constraint, provocation]
+    text: "{constraint}{concept_a}を扱うとする。{provocation}。"

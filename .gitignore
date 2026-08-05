@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# 蓄積された考え（ローカルのもの）
+*.db
+*.db-journal
+
+.pytest_cache/
+.DS_Store
