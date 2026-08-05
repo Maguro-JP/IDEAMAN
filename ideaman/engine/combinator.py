@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from .lexicon import Lexicon, Template, Term, default_lexicon
@@ -41,6 +42,18 @@ class IdeaSeed:
     seed: int
     #: 抽選に使われた語を (プール名, 語) の形で持つ。評価による重み更新で使う。
     terms: tuple[tuple[str, str], ...] = field(default=())
+    #: 引いた概念同士の遠さ（0〜1）。連想を始めるかの判断に使う。
+    novelty: float = 0.0
+
+    @property
+    def signature(self) -> str:
+        """同じ組み合わせに再到達したかを判定するための署名。
+
+        テンプレートと語の集合だけで決まる。語順やシードは含めない
+        （「星座と手紙」と「手紙と星座」は同じ発想）。
+        """
+        terms = sorted(f"{pool}:{term}" for pool, term in self.terms)
+        return f"{self.template_id}|" + "|".join(terms)
 
 
 def _weighted_choice(
@@ -102,6 +115,30 @@ def _filter_by_domain(terms: tuple[Term, ...], domain: str | None) -> tuple[Term
     return narrowed if len(narrowed) >= 2 else terms
 
 
+def _pick_inherited(
+    rng: random.Random,
+    inherit: Sequence[tuple[str, str]],
+    count: int,
+    usable_pools: set[str],
+) -> dict[str, list[str]]:
+    """引き継ぐ語を、プール名ごとに分けて返す。
+
+    **今回のテンプレートが実際に使うプールの語だけを候補にする。** これを
+    しないと、引き継いだつもりの語が使われず、連鎖が名ばかりになる
+    （親子として記録されているのに一語も共有していない状態）。
+    """
+    if count <= 0 or not inherit:
+        return {}
+    usable = [(pool, term) for pool, term in inherit if pool in usable_pools]
+    if not usable:
+        return {}
+    chosen = rng.sample(usable, min(count, len(usable)))
+    carried: dict[str, list[str]] = {}
+    for pool, term in chosen:
+        carried.setdefault(pool, []).append(term)
+    return carried
+
+
 def combine(
     *,
     lexicon: Lexicon | None = None,
@@ -109,15 +146,20 @@ def combine(
     domain: str | None = None,
     tone: str | None = None,
     seed: int | None = None,
+    inherit: Sequence[tuple[str, str]] = (),
+    inherit_count: int = 0,
 ) -> IdeaSeed:
     """語彙を衝突させて `IdeaSeed` を1つ作る。
 
     Args:
         lexicon: 使う語彙。省略時は既定の語彙。
         weights: 語 -> 重み。評価によって育った値を渡す。未知の語は 1.0 扱い。
+            0.0 の語は抽選から外れる（休眠している語）。
         domain: 分野を指定すると concepts をその分野に寄せる（Phase 3 の下地）。
         tone: `oracle` / `proposal` / `question` のいずれか。省略時はランダム。
         seed: 乱数シード。指定すると結果が決定的になる。
+        inherit: 直前のアイデアが使った (プール名, 語)。連想モードで持ち越す候補。
+        inherit_count: このうち何語を引き継ぐか。0 なら引き継がない（放浪）。
 
     Returns:
         文章化前の構造化された種。
@@ -133,21 +175,49 @@ def combine(
         candidates = lexicon.templates
     template: Template = rng.choice(candidates)
 
+    usable_pools = {
+        SLOT_TO_POOL[slot] for slot in template.needs if slot in SLOT_TO_POOL
+    }
+    carried = _pick_inherited(rng, inherit, inherit_count, usable_pools)
     slots: dict[str, str] = {}
     used: list[tuple[str, str]] = []
+    novelty = 0.0
+
+    def take_carried(pool_name: str) -> str | None:
+        """そのプールに引き継ぎ語があれば1つ取り出す。"""
+        pending = carried.get(pool_name)
+        return pending.pop() if pending else None
 
     # concepts は「遠い2語」をまとめて引く必要があるので先に処理する。
     concept_slots = [s for s in template.needs if SLOT_TO_POOL.get(s) == "concepts"]
     if concept_slots:
         pool = _filter_by_domain(lexicon.pool("concepts"), domain)
         if len(concept_slots) >= 2:
-            a, b = _pick_far_pair(rng, pool, weights)
-            slots["concept_a"], slots["concept_b"] = a.term, b.term
-            used += [("concepts", a.term), ("concepts", b.term)]
+            # 片方だけ引き継ぐと「同じ題材を別の角度から見る」形になる。
+            # 両方引き継ぐと元と同じ組になるので、必ず片方は引き直す。
+            kept = take_carried("concepts")
+            if kept is not None:
+                other = _weighted_choice(rng, pool, weights)
+                for _ in range(CANDIDATE_TRIES):
+                    if other.term != kept:
+                        break
+                    other = _weighted_choice(rng, pool, weights)
+                if other.term == kept:
+                    other = next(t for t in pool if t.term != kept)
+                a_term, b_term = kept, other.term
+            else:
+                a, b = _pick_far_pair(rng, pool, weights)
+                a_term, b_term = a.term, b.term
+            slots["concept_a"], slots["concept_b"] = a_term, b_term
+            used += [("concepts", a_term), ("concepts", b_term)]
+            by_term = {t.term: t for t in pool}
+            if a_term in by_term and b_term in by_term:
+                novelty = _distance(by_term[a_term], by_term[b_term])
         else:
-            a = _weighted_choice(rng, pool, weights)
-            slots[concept_slots[0]] = a.term
-            used.append(("concepts", a.term))
+            kept = take_carried("concepts")
+            term = kept or _weighted_choice(rng, pool, weights).term
+            slots[concept_slots[0]] = term
+            used.append(("concepts", term))
 
     for slot in template.needs:
         if slot in slots:
@@ -155,9 +225,10 @@ def combine(
         pool_name = SLOT_TO_POOL.get(slot)
         if pool_name is None:
             raise ValueError(f"未知のスロット {slot!r} (template={template.id})")
-        term = _weighted_choice(rng, lexicon.pool(pool_name), weights)
-        slots[slot] = term.term
-        used.append((pool_name, term.term))
+        kept = take_carried(pool_name)
+        term_text = kept or _weighted_choice(rng, lexicon.pool(pool_name), weights).term
+        slots[slot] = term_text
+        used.append((pool_name, term_text))
 
     return IdeaSeed(
         template_id=template.id,
@@ -167,4 +238,5 @@ def combine(
         mood=rng.choice(lexicon.moods),
         seed=seed,
         terms=tuple(used),
+        novelty=novelty,
     )

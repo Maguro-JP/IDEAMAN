@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 
 from ideaman import service
@@ -107,3 +109,94 @@ def test_generated_weights_feed_back_into_generation(store):
     second = service.generate_idea(store, use_llm=False)
     assert second.id != first.id
     assert store.stock_count() == 2
+
+
+# --- Phase 2 で足したもの --------------------------------------------
+
+
+def test_phase1_database_is_migrated(tmp_path):
+    """Phase 1 の DB を開いても壊れず、新しい列が足される。
+
+    ユーザーが既に溜めたアイデアを捨てさせないための保証。
+    """
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE ideas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL, seed_json TEXT NOT NULL, domain TEXT,
+            template_id TEXT NOT NULL, tone TEXT NOT NULL, mood TEXT NOT NULL,
+            source TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'unseen',
+            parent_id INTEGER, created_at TEXT NOT NULL, seen_at TEXT
+        );
+        CREATE TABLE ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, idea_id INTEGER NOT NULL,
+            score INTEGER NOT NULL, note TEXT, created_at TEXT NOT NULL
+        );
+        CREATE TABLE weights (
+            pool TEXT NOT NULL, term TEXT NOT NULL,
+            weight REAL NOT NULL DEFAULT 1.0, PRIMARY KEY (pool, term)
+        );
+        INSERT INTO ideas
+            (text, seed_json, domain, template_id, tone, mood, source, created_at)
+        VALUES ('昔のアイデア', '{"slots":{},"terms":[["concepts","地図"]],"seed":1}',
+                NULL, 'oracle_collision', 'oracle', '静穏', 'engine', '2026-01-01');
+        INSERT INTO weights (pool, term, weight) VALUES ('concepts', '地図', 1.5);
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = Store(path)
+    try:
+        # 昔のアイデアも重みも残っている
+        assert store.get(1).text == "昔のアイデア"
+        assert store.weights()["地図"] == 1.5
+        # 新しい列と表が使える
+        assert store.thought_state().mode == "wander"
+        assert store.terms_of(1) == (("concepts", "地図"),)
+        service.generate_idea(store, use_llm=False)
+    finally:
+        store.close()
+
+
+def test_migration_is_idempotent(tmp_path):
+    """二度開いても ALTER TABLE で落ちない。"""
+    path = tmp_path / "twice.db"
+    for _ in range(3):
+        s = Store(path)
+        s.close()
+
+
+def test_chain_returns_the_whole_flow(store):
+    parent = store.save(combine(seed=1), "親", "engine")
+    child = store.save(
+        combine(seed=2), "子", "engine", parent_id=parent.id, chain_id=parent.chain_id
+    )
+    chain = store.chain(child.id)
+    assert [i.id for i in chain] == [parent.id, child.id]
+
+
+def test_chain_of_unknown_idea_raises(store):
+    with pytest.raises(KeyError):
+        store.chain(9999)
+
+
+def test_search_prefers_high_scores(store):
+    low = store.save(combine(seed=1), "普通のもの", "engine")
+    high = store.save(combine(seed=2), "良いもの", "engine")
+    store.rate(high.id, 1)
+    store.rate(high.id, 1)
+
+    assert store.search(limit=2)[0].id == high.id
+    assert [i.id for i in store.search("良い")] == [high.id]
+    assert store.search("存在しない語") == []
+    assert low.id in {i.id for i in store.search(limit=10)}
+
+
+def test_counters(store):
+    assert store.counter("nothing") == 0
+    store.bump_counter("duplicate_hits")
+    store.bump_counter("duplicate_hits", 2)
+    assert store.counter("duplicate_hits") == 3

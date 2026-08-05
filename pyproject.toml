@@ -15,15 +15,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# LLM 仕上げは完全にオプション。無くても全機能が動く。
+# どれもオプション。Web とワーカーは追加依存なしで動く。
 llm = ["anthropic>=0.40"]
+bot = ["discord.py>=2.3"]
+# 2.x で FastMCP が MCPServer に変わったため 1.x では動かない
+mcp = ["mcp>=2.0"]
 dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[project.scripts]
+ideaman = "ideaman.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ideaman*"]
 
 [tool.setuptools.package-data]
-ideaman = ["data/*.yaml", "static/*.html", "schema.sql"]
+ideaman = ["data/*.yaml", "static/*.html", "*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
