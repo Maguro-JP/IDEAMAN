@@ -181,7 +181,10 @@ def combine(
     carried = _pick_inherited(rng, inherit, inherit_count, usable_pools)
     slots: dict[str, str] = {}
     used: list[tuple[str, str]] = []
-    novelty = 0.0
+    # 概念を1つしか引かないテンプレートでは衝突の距離が測れない。0 にすると
+    # 「つまらない」と誤解されるので、測れない＝中立として 0.5 を既定にする
+    # （`_distance` がタグ無し同士に 0.5 を返すのと同じ考え方）。
+    novelty = 0.5
 
     def take_carried(pool_name: str) -> str | None:
         """そのプールに引き継ぎ語があれば1つ取り出す。"""

@@ -59,6 +59,8 @@ class Idea:
     chain_id: int | None = None
     parent_id: int | None = None
     mode: str | None = None
+    verdict: str | None = None
+    pick_score: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +76,7 @@ class Idea:
             "chain_id": self.chain_id,
             "parent_id": self.parent_id,
             "mode": self.mode,
+            "verdict": self.verdict,
         }
 
 
@@ -96,6 +99,12 @@ def _row_to_idea(row: sqlite3.Row) -> Idea:
         chain_id=row["chain_id"] if "chain_id" in keys else None,
         parent_id=row["parent_id"] if "parent_id" in keys else None,
         mode=row["mode"] if "mode" in keys else None,
+        verdict=row["verdict"] if "verdict" in keys else None,
+        pick_score=(
+            row["pick_score"]
+            if "pick_score" in keys and row["pick_score"] is not None
+            else 0.0
+        ),
     )
 
 
@@ -135,6 +144,10 @@ class Store:
                 ("signature", "TEXT"),
                 ("chain_id", "INTEGER"),
                 ("mode", "TEXT"),
+                # CHECK 制約は付けない。ALTER TABLE で足す列に制約を付けると
+                # 既存行の検証で落ちることがあるうえ、後から外せない。
+                ("verdict", "TEXT"),
+                ("pick_score", "REAL NOT NULL DEFAULT 0.0"),
             ],
             "weights": [
                 ("dormant_until", "TEXT"),
@@ -322,6 +335,8 @@ class Store:
                         "slots": seed.slots,
                         "terms": [list(t) for t in seed.terms],
                         "seed": seed.seed,
+                        # 選別のスコアに使うので残す（列は増やさない）
+                        "novelty": seed.novelty,
                     },
                     ensure_ascii=False,
                 ),
@@ -344,6 +359,15 @@ class Store:
             )
         self.conn.commit()
         return self.get(idea_id)  # type: ignore[arg-type]
+
+    def novelty_of(self, idea_id: int) -> float:
+        """そのアイデアの語がどれだけ離れていたか。古い行には無いので 0.0。"""
+        row = self.conn.execute(
+            "SELECT seed_json FROM ideas WHERE id = ?", (idea_id,)
+        ).fetchone()
+        if row is None:
+            return 0.0
+        return float(json.loads(row["seed_json"]).get("novelty", 0.0))
 
     def terms_of(self, idea_id: int) -> tuple[tuple[str, str], ...]:
         """そのアイデアが使った (プール名, 語)。連想で引き継ぐ候補になる。"""
@@ -380,22 +404,25 @@ class Store:
         ).fetchall()
         return [_row_to_idea(r) for r in rows]
 
-    def take_unseen(self, domain: str | None = None) -> Idea | None:
+    def take_ready(self, domain: str | None = None) -> Idea | None:
         """在庫から1件取り出して `seen` にする。無ければ None。
 
-        「すでに考えてあったもの」を返すのがこのメソッドの役目。呼び出し側は
-        None が返ってきたときだけその場で生成する。
+        在庫とは **連鎖が閉じたときに選ばれたもの**（`verdict='chosen'`）だけ。
+        連鎖の途中（まだ判定していないもの）や、選ばれなかったものは出さない。
+        独り言を垂れ流さないための関門がここ。
+
+        FIFO ではなくスコアの高い順に出す。溜まった `chosen` は質のプール
+        として機能させる。
         """
-        if domain is None:
-            row = self.conn.execute(
-                "SELECT * FROM ideas WHERE state = 'unseen' ORDER BY id LIMIT 1"
-            ).fetchone()
-        else:
-            row = self.conn.execute(
-                "SELECT * FROM ideas WHERE state = 'unseen' AND domain = ? "
-                "ORDER BY id LIMIT 1",
-                (domain,),
-            ).fetchone()
+        clause = "state = 'unseen' AND verdict = 'chosen'"
+        params: tuple = ()
+        if domain is not None:
+            clause += " AND domain = ?"
+            params = (domain,)
+        row = self.conn.execute(
+            f"SELECT * FROM ideas WHERE {clause} ORDER BY pick_score DESC, id LIMIT 1",
+            params,
+        ).fetchone()
         if row is None:
             return None
 
@@ -415,17 +442,58 @@ class Store:
         return self.get(idea_id)
 
     def stock_count(self, domain: str | None = None) -> int:
-        """在庫（未閲覧）の件数。"""
-        if domain is None:
-            row = self.conn.execute(
-                "SELECT COUNT(*) AS n FROM ideas WHERE state = 'unseen'"
-            ).fetchone()
-        else:
-            row = self.conn.execute(
-                "SELECT COUNT(*) AS n FROM ideas WHERE state = 'unseen' AND domain = ?",
-                (domain,),
-            ).fetchone()
+        """出せる在庫の件数。
+
+        「考えた数」ではなく「選ばれてまだ出していない数」。連鎖の途中の
+        独り言は含まない。
+        """
+        clause = "state = 'unseen' AND verdict = 'chosen'"
+        params: tuple = ()
+        if domain is not None:
+            clause += " AND domain = ?"
+            params = (domain,)
+        row = self.conn.execute(
+            f"SELECT COUNT(*) AS n FROM ideas WHERE {clause}", params
+        ).fetchone()
         return row["n"]
+
+    def unjudged(self) -> list[Idea]:
+        """まだ判定していないもの（＝連鎖が閉じていない独り言）。"""
+        rows = self.conn.execute(
+            "SELECT * FROM ideas WHERE verdict IS NULL ORDER BY id"
+        ).fetchall()
+        return [_row_to_idea(row) for row in rows]
+
+    def recent_scores(self, limit: int = 50) -> list[float]:
+        """直近に判定したもののスコア。単発の思いつきを測る物差しに使う。"""
+        rows = self.conn.execute(
+            "SELECT pick_score FROM ideas WHERE verdict IS NOT NULL "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [row["pick_score"] for row in rows]
+
+    def set_verdict(self, idea_id: int, verdict: str, score: float = 0.0) -> None:
+        """選別の結果を書く。
+
+        Args:
+            verdict: `chosen`（出す）か `kept`（残すが出さない）。
+        """
+        if verdict not in ("chosen", "kept"):
+            raise ValueError(f"verdict は chosen か kept です: {verdict!r}")
+        self.conn.execute(
+            "UPDATE ideas SET verdict = ?, pick_score = ? WHERE id = ?",
+            (verdict, score, idea_id),
+        )
+        self.conn.commit()
+
+    def update_text(self, idea_id: int, text: str, source: str) -> None:
+        """本文を差し替える。選ばれたものだけを磨くときに使う。"""
+        self.conn.execute(
+            "UPDATE ideas SET text = ?, source = ? WHERE id = ?",
+            (text, source, idea_id),
+        )
+        self.conn.commit()
 
     def get(self, idea_id: int) -> Idea:
         row = self.conn.execute(

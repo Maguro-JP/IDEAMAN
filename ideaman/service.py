@@ -9,9 +9,11 @@ Web からも、Bot からも、常駐ワーカーからも、MCP からもこ�
 
 from __future__ import annotations
 
+import json
 import logging
 import random
 
+from . import curator
 from .engine import rhythm, templates
 from .engine.combinator import IdeaSeed, combine
 from .engine.lexicon import Lexicon, default_lexicon
@@ -26,6 +28,10 @@ DEFAULT_STOCK = 5
 #: 重複を引いたときに引き直す回数の上限。
 #: ここを大きくしても、鉱脈が尽きていれば結局重複するので粘りすぎない。
 MAX_REDRAWS = 6
+
+#: 在庫を1件得るために考える回数の上限。連鎖が閉じるまで選別は走らないので
+#: 空回りしうる。無限に考え込まないための歯止め。
+MAX_THINKING_STEPS = 20
 
 
 def _draw(
@@ -103,10 +109,9 @@ def generate_idea(
         store, lexicon=lexicon, domain=domain, tone=tone, seed=seed
     )
 
+    # ここでは磨かない。連鎖7件のうち5〜6件は表に出ないので、出すと決まって
+    # から磨く（`_close_chain`）。API 呼び出しが 1/4 以下になる。
     text = templates.render(idea_seed, lexicon)
-    source = "engine"
-    if use_llm:
-        text, source = refine(idea_seed, text)
 
     state = store.thought_state()
     for _ in range(duplicates):
@@ -116,7 +121,7 @@ def generate_idea(
     idea = store.save(
         idea_seed,
         text,
-        source,
+        "engine",
         parent_id=parent.id if step.mode == rhythm.ASSOCIATE and parent else None,
         chain_id=chain_id,
         mode=step.mode,
@@ -142,10 +147,54 @@ def generate_idea(
             state.chain_length,
             state.stale_hits,
         )
+        _close_chain(store, idea.id, use_llm=use_llm)
         state = rhythm.leave_chain(state)
+    elif state.mode == rhythm.WANDER:
+        # 引きが spark せず、この1件で完結した。連想の連鎖にはならなかった
+        # ので、ここで閉じる。**これを忘れると永久に判定されず、一生
+        # 配信されないアイデアが溜まっていく。**
+        _close_chain(store, idea.id, use_llm=use_llm)
 
     store.save_thought_state(state)
     return idea
+
+
+def _close_chain(store: Store, idea_id: int, *, use_llm: bool = True) -> list[Idea]:
+    """閉じた連鎖を判定し、選ばれたものだけを磨く。
+
+    ここが「独り言」と「発言」の境目。判定されるまで、どのアイデアも
+    外には出ない。
+    """
+    chain = store.chain(idea_id)
+    chosen = curator.curate(store, chain, use_llm=use_llm)
+
+    if use_llm:
+        lexicon = default_lexicon()
+        for idea in chosen:
+            seed = _seed_of(store, idea, lexicon)
+            text, source = refine(seed, idea.text)
+            if source == "llm":
+                store.update_text(idea.id, text, source)
+    return chosen
+
+
+def _seed_of(store: Store, idea: Idea, lexicon: Lexicon) -> IdeaSeed:
+    """保存されたアイデアから、磨くのに必要な種を組み立て直す。"""
+    raw = json.loads(
+        store.conn.execute(
+            "SELECT seed_json FROM ideas WHERE id = ?", (idea.id,)
+        ).fetchone()["seed_json"]
+    )
+    return IdeaSeed(
+        template_id="",
+        tone=idea.tone,
+        slots=raw["slots"],
+        domain=idea.domain,
+        mood=idea.mood,
+        seed=raw["seed"],
+        terms=tuple(tuple(t) for t in raw["terms"]),  # type: ignore[misc]
+        novelty=raw.get("novelty", 0.0),
+    )
 
 
 def receive_idea(
@@ -157,21 +206,48 @@ def receive_idea(
     """溜まっている考えを1つ受け取る。
 
     在庫があればそれを返し（＝すでに考えてあったもの）、空のときだけその場で
-    考える。在庫の作られ方が賢くなっても、この関数の形は変わらない。
+    考える。返るのは**選ばれたものだけ**なので、空のときは連鎖が閉じるまで
+    考え続ける必要がある（1件生成しただけでは選別が走らない）。
     """
-    idea = store.take_unseen(domain=domain)
+    idea = store.take_ready(domain=domain)
     if idea is not None:
         return idea
-    fresh = generate_idea(store, domain=domain, use_llm=use_llm)
+
+    for _ in range(MAX_THINKING_STEPS):
+        fresh = generate_idea(store, domain=domain, use_llm=use_llm)
+        if fresh.verdict == "chosen":
+            return store.mark_seen(fresh.id)
+        ready = store.take_ready(domain=domain)
+        if ready is not None:
+            return ready
+
+    # ここまで来るのは連鎖が閉じないほど回した場合。考えたものを無駄に
+    # しないよう、直近のものをそのまま出す。
+    log.warning("連鎖が閉じないまま上限に達したので、直近の考えを出す")
     return store.mark_seen(fresh.id)
 
 
 def prefill(store: Store, count: int = DEFAULT_STOCK, *, use_llm: bool = True) -> int:
-    """在庫を `count` 件まで補充し、新たに考えた数を返す。
+    """出せる在庫を `count` 件まで補充し、考えた回数を返す。
+
+    在庫として数えるのは**選ばれたもの**だけ。連鎖が閉じるまで選別は走らない
+    ので、1件確保するのに数回〜10回ほど考えることになる。
 
     ワーカーがこれを定期的に呼ぶことで「裏で考え続けている」状態になる。
     """
-    missing = max(count - store.stock_count(), 0)
-    for _ in range(missing):
+    if store.stock_count() >= count:
+        return 0
+
+    thought = 0
+    limit = max(count, 1) * MAX_THINKING_STEPS
+    while store.stock_count() < count and thought < limit:
         generate_idea(store, use_llm=use_llm)
-    return missing
+        thought += 1
+
+    if store.stock_count() < count:
+        log.warning(
+            "%d 回考えたが在庫が %d 件までしか埋まらなかった",
+            thought,
+            store.stock_count(),
+        )
+    return thought

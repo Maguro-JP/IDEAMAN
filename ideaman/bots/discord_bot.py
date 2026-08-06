@@ -33,9 +33,32 @@ DOWN = "\N{THUMBS DOWN SIGN}"
 REACTIONS = {UP: 1, DOWN: -1}
 
 
+#: スレッドに入れる連鎖の最大件数。
+MAX_THREAD_LINES = 10
+
+
 def _format(idea) -> str:
     """投稿の文面。装飾は最小限にする（天啓に絵文字は要らない）。"""
     return f"> {idea.text}"
+
+
+async def _attach_chain(store: Store, message, idea) -> None:
+    """同じ連鎖の残りをスレッドに入れる。
+
+    表に出すのは選ばれた1〜2件だけだが、そこに至るまでの思考は捨てていない。
+    Discord のスレッドは既定で畳まれているので、見たい人だけが開く形になる。
+    """
+    rest = [i for i in store.chain(idea.id) if i.id != idea.id]
+    if not rest:
+        return
+    try:
+        thread = await message.create_thread(name="この思考の流れ")
+        body = "\n".join(f"- {i.text}" for i in rest[:MAX_THREAD_LINES])
+        if len(rest) > MAX_THREAD_LINES:
+            body += f"\n（ほか {len(rest) - MAX_THREAD_LINES} 件）"
+        await thread.send(body)
+    except Exception:  # noqa: BLE001 - スレッドが作れなくても本体は届いている
+        log.warning("スレッドを作れなかった: idea=%s", idea.id, exc_info=True)
 
 
 def build_bot(store: Store, channel_id: int):
@@ -65,6 +88,7 @@ def build_bot(store: Store, channel_id: int):
                 # 押しやすいように先に付けておく
                 await message.add_reaction(UP)
                 await message.add_reaction(DOWN)
+                await _attach_chain(store, message, idea)
                 store.mark_delivered(delivery_id, str(message.id))
                 log.info("投稿した: idea=%s message=%s", idea.id, message.id)
             except Exception:  # noqa: BLE001 - 1件の失敗で残りを止めない
@@ -109,6 +133,7 @@ def build_bot(store: Store, channel_id: int):
         )
         await message.add_reaction(UP)
         await message.add_reaction(DOWN)
+        await _attach_chain(store, message, idea)
 
     @bot.tree.command(name="stock", description="いくつ考えが溜まっているか")
     async def stock_command(interaction) -> None:

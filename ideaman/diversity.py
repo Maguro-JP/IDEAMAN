@@ -30,6 +30,9 @@ class Health:
     duplicate_hits: int = 0
     dormant_now: int = 0
     revived: int = 0
+    chosen: int = 0
+    kept: int = 0
+    unjudged: int = 0
 
     def report(self) -> str:
         """人が読む形。指標だけ見ても分からないので、判断の目安も書く。"""
@@ -47,12 +50,17 @@ class Health:
             f"上位集中度        {self.top_share:.0%}（最頻出5語が占める割合）",
             f"重複到達          {self.duplicate_hits} 回",
             f"いま休眠中        {self.dormant_now} 語 / 復帰済み {self.revived} 語",
+            f"選別              出す {self.chosen} / 残す {self.kept} "
+            f"/ 判定前 {self.unjudged}"
+            + (f"（{self.chosen / self.total:.0%} を出す）" if self.total else ""),
             "",
             "読み方:",
             "  連鎖の長さが全部1  → 連想が働いていない（ただの乱数になっている）",
             "  重複到達が0        → 連想が浅い。ゼロが正解ではない",
             "  上位集中度が高い   → 同じ語ばかり。休眠が効いていない",
             "  休眠が0            → 行き詰まりを検知できていない",
+            "  出す割合が高い     → 選別が甘い。連鎖7件なら2〜3割が目安",
+            "  判定前が多い       → 連鎖が閉じていない（考え込んで出てこない）",
         ]
         return "\n".join(lines)
 
@@ -60,7 +68,8 @@ class Health:
 def measure(store: Store, limit: int = 500) -> Health:
     """直近 `limit` 件からリズムを測る。"""
     rows = store.conn.execute(
-        "SELECT id, chain_id, mode, seed_json FROM ideas ORDER BY id DESC LIMIT ?",
+        "SELECT id, chain_id, mode, verdict, seed_json FROM ideas "
+        "ORDER BY id DESC LIMIT ?",
         (limit,),
     ).fetchall()
 
@@ -80,6 +89,11 @@ def measure(store: Store, limit: int = 500) -> Health:
         sum(chain_lengths.values()) / len(chain_lengths) if chain_lengths else 0.0
     )
     health.mode_counts = Counter(row["mode"] or "unknown" for row in rows)
+
+    verdicts = Counter(row["verdict"] for row in rows)
+    health.chosen = verdicts["chosen"]
+    health.kept = verdicts["kept"]
+    health.unjudged = verdicts[None]
 
     term_counts: Counter = Counter()
     for row in rows:

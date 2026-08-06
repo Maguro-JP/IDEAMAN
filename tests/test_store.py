@@ -12,12 +12,47 @@ def _save(store: Store, seed: int = 1):
     return idea_seed, store.save(idea_seed, "てすと", "engine")
 
 
-def test_saved_idea_starts_unseen(store):
+def test_saved_idea_starts_unseen_and_unjudged(store):
+    """保存直後は「まだ判定していない独り言」。在庫には数えない。"""
     _, idea = _save(store)
     assert idea.state == "unseen"
-    assert store.stock_count() == 1
+    assert idea.verdict is None
+    assert store.stock_count() == 0, "判定前のものが在庫に数えられている"
+    assert len(store.unjudged()) == 1
     # 未閲覧のものは一覧に出ない
     assert store.list_seen() == []
+
+
+def test_only_chosen_counts_as_stock(store):
+    _, first = _save(store)
+    _, second = _save(store, seed=2)
+    store.set_verdict(first.id, "chosen", 0.8)
+    store.set_verdict(second.id, "kept", 0.1)
+
+    assert store.stock_count() == 1
+    assert store.take_ready().id == first.id
+
+
+def test_kept_ideas_are_not_deleted(store):
+    """選ばれなくても捨てない。連鎖を辿れば読める。"""
+    _, idea = _save(store)
+    store.set_verdict(idea.id, "kept", 0.1)
+
+    assert store.get(idea.id).verdict == "kept"
+    assert idea.id in {i.id for i in store.search(limit=10)}
+    assert idea.id in {i.id for i in store.chain(idea.id)}
+
+
+def test_ready_comes_out_best_first(store):
+    """FIFO ではなくスコア順。溜まった chosen は質のプールになる。"""
+    _, low = _save(store, seed=1)
+    _, high = _save(store, seed=2)
+    store.set_verdict(low.id, "chosen", 0.2)
+    store.set_verdict(high.id, "chosen", 0.9)
+
+    assert store.take_ready().id == high.id
+    assert store.take_ready().id == low.id
+    assert store.take_ready() is None
 
 
 def test_upvote_raises_weights_of_its_terms(store):
@@ -108,7 +143,7 @@ def test_generated_weights_feed_back_into_generation(store):
     store.rate(first.id, 1)
     second = service.generate_idea(store, use_llm=False)
     assert second.id != first.id
-    assert store.stock_count() == 2
+    assert store.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()[0] == 2
 
 
 # --- Phase 2 で足したもの --------------------------------------------

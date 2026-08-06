@@ -62,9 +62,13 @@ def test_downtime_does_not_cause_a_burst():
 
 
 def test_think_keeps_the_stock_topped_up(store):
+    """在庫は「選ばれてまだ出していない数」。
+
+    連鎖が閉じるまで選別が走らないので、4件確保するのに何回も考える。
+    """
     worker = Worker(store, stock=4, use_llm=False)
-    assert worker.think() == 4
-    assert store.stock_count() == 4
+    assert worker.think() >= 4  # 返るのは考えた回数
+    assert store.stock_count() >= 4
     # すでに足りていれば考えない
     assert worker.think() == 0
 

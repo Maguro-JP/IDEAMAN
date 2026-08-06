@@ -48,9 +48,14 @@ def test_works_without_api_key(client):
 
 
 def test_stock_is_prefilled_at_startup(client):
-    assert client.get("/api/stock").json()["count"] == 1
+    """在庫は目標を下回らない。
+
+    連鎖が閉じると1〜2件がまとめて選ばれるので、ちょうど1件とは限らない。
+    """
+    before = client.get("/api/stock").json()["count"]
+    assert before >= 1
     client.post("/api/idea")
-    assert client.get("/api/stock").json()["count"] == 0
+    assert client.get("/api/stock").json()["count"] == before - 1
 
 
 def test_rate_unknown_idea_is_404(client):

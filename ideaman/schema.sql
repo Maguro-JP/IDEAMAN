@@ -24,7 +24,14 @@ CREATE TABLE IF NOT EXISTS ideas (
     -- 連鎖の識別子。同じ chain_id を持つものは一つの思考の流れ
     chain_id    INTEGER,
     -- associate（連想）か wander（放浪）か
-    mode        TEXT
+    mode        TEXT,
+    -- 連鎖が閉じたときの選別結果。
+    --   NULL     まだ判定していない（連鎖の途中＝独り言の最中）
+    --   chosen   選ばれた。配信・Web・MCP に出る
+    --   kept     選ばれなかった。捨てない。連鎖を辿れば読める
+    verdict     TEXT CHECK (verdict IS NULL OR verdict IN ('chosen', 'kept')),
+    -- 選別のときに付いたスコア。取り出す順序に使い、あとで選び方を検証できる
+    pick_score  REAL NOT NULL DEFAULT 0.0
 );
 
 
