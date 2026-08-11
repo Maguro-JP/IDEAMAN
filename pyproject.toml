@@ -25,12 +25,6 @@ dev = ["pytest>=8.0", "httpx>=0.27"]
 [project.scripts]
 ideaman = "ideaman.cli:main"
 
-# Vercel に既存の FastAPI をそのまま指す。
-# ただし Vercel はサーバーレスでファイルシステムが揮発するため、ここに
-# 載るのは「触って感じを見る」デモ止まり（下の注意書きと README を参照）。
-[tool.vercel]
-entrypoint = "ideaman.app:app"
-
 [tool.setuptools.packages.find]
 include = ["ideaman*"]
 
