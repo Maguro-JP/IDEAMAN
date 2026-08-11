@@ -3,10 +3,5 @@
   "env": {
     "IDEAMAN_DB": "/tmp/ideaman.db",
     "IDEAMAN_STOCK": "3"
-  },
-  "functions": {
-    "**/*.py": {
-      "excludeFiles": "{tests/**,.venv/**,**/*.db,**/*.db-wal,**/*.db-shm}"
-    }
   }
 }
