@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -17,11 +19,25 @@ from . import service
 from .engine.lexicon import all_domains, default_lexicon
 from .store import Store
 
+log = logging.getLogger(__name__)
+
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 def stock_size() -> int:
     """起動時にこの件数まで在庫を作る。0 なら補充しない。"""
     return int(os.environ.get("IDEAMAN_STOCK", service.DEFAULT_STOCK))
+
+
+def embed_worker() -> bool:
+    """ワーカーを Web と同じプロセスで回すか。
+
+    SQLite を使う以上、Web とワーカーは**同じディスクを見ている必要がある**。
+    1台のホストに載せるときはプロセスを分ける意味が薄いので、同居させて
+    しまうほうが確実（別マシンに分けると DB が共有されない）。
+
+    ローカル開発では既定どおり分けたままにする。
+    """
+    return os.environ.get("IDEAMAN_EMBED_WORKER", "").lower() in ("1", "true", "yes")
 
 
 class RateRequest(BaseModel):
@@ -37,6 +53,22 @@ async def lifespan(app: FastAPI):
     target = stock_size()
     if target > 0:
         service.prefill(store, target)
+
+    if embed_worker():
+        # デーモンスレッドなので、Web が終わるときに道連れで止まる。
+        # ワーカー側は例外を自分で飲み込むので、ここで落ちることはない。
+        from .notify import QueueNotifier
+        from .worker import Worker
+
+        worker = Worker(
+            store,
+            [QueueNotifier(store, "discord")],
+            stock=target if target > 0 else service.DEFAULT_STOCK,
+        )
+        thread = threading.Thread(target=worker.run, daemon=True, name="ideaman-worker")
+        thread.start()
+        log.info("ワーカーを同じプロセスで起動した")
+
     try:
         yield
     finally:

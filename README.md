@@ -18,7 +18,53 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 
 ブラウザで http://localhost:8000 を開き、中央のボタンを押す。
 
-API キーは不要。全機能がオフラインで動く。
+API キーは不要。全機能がオフラインで動く。裏で考え続けさせるなら、別の
+ターミナルで `ideaman worker` も回す。
+
+## 稼動させる
+
+このシステムは**溜まって育つ**ことが本体なので、置き場所の選び方がそのまま
+性格を決める。要るのは3つ:
+
+| 要るもの | なぜ |
+| --- | --- |
+| 永続ディスク | 溜めたアイデアと育った重みが消えないため |
+| 常駐プロセス | 裏で考え続けるため（ワーカー） |
+| 公開 HTTPS | Web を見るため。LINE を足すときにも必須 |
+
+### 本番: Fly.io（推奨）
+
+3つ全部揃う。`Dockerfile` と `fly.toml` を置いてあるので、そのまま載る。
+
+```bash
+fly launch --no-deploy          # 既存の fly.toml を使う
+fly volumes create ideaman_data --size 1
+fly deploy
+```
+
+Web とワーカーは**同じ1台に同居させる**（`IDEAMAN_EMBED_WORKER=1`）。
+SQLite を共有する必要があるので、別マシンに分けてはいけない。
+
+Discord Bot を動かすときも、同じディスクを見る必要があるので同じ machine で
+動かす（`deliveries` テーブルをプロセス間キューとして使っているため）。
+
+### デモ: Vercel
+
+**触って感じを見るだけなら Vercel でも動く。** `vercel.json` と `api/index.py`
+を置いてあり、push すれば自動でデプロイされる。
+
+ただし Vercel はサーバーレスで**ファイルシステムが揮発する**:
+
+- 溜めたアイデアも育った重みもコールドスタートで消える
+- 常駐ワーカーが動かないので「裏で考え続ける」部分が無い
+
+つまり **UI を触ってみる用**であって、本来の姿ではない。「毎日アイデアを
+提供してくれる」を成立させるには上の永続ホスティングが要る。
+
+### 手元だけで済ませる
+
+ローカルで `uvicorn` と `ideaman worker` を回す。データは手元の
+`ideaman.db` に残る。公開しないならこれで十分。
 
 ## しくみ
 
@@ -214,6 +260,7 @@ LLM は**オプション**であって前提ではない。
 | `IDEAMAN_DB` | `ideaman.db` | SQLite のパス（全プロセスで共有する） |
 | `IDEAMAN_STOCK` | `5` | 確保する在庫の数（0 で補充しない） |
 | `IDEAMAN_SCHEDULE` | `08:00,13:00,21:00` | 配信時刻（ローカルタイム） |
+| `IDEAMAN_EMBED_WORKER` | `0` | `1` で Web と同じプロセスでワーカーを回す（1台に載せるとき用） |
 | `ANTHROPIC_API_KEY` | — | あれば LLM 仕上げが有効になる |
 | `DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` | — | Discord Bot 用 |
 
