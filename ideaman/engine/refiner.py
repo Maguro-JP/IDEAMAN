@@ -47,6 +47,32 @@ def is_available() -> bool:
     return True
 
 
+#: 仕上がりが元の何倍までなら受け入れるか。
+#: 「1〜2文」と指示しているので、大きく超えたら前置きや解説が混ざっている。
+MAX_GROWTH = 2.5
+
+#: 混ざっていたら捨てる印。タグの漏れ、箇条書き、前置き。
+_SUSPICIOUS = ("<thinking", "</thinking", "<", "```", "- ", "* ", "1. ")
+
+
+def usable(refined: str, original: str) -> bool:
+    """仕上がりをそのままアイデアとして出してよいか。
+
+    **ここを通った文字列は、そのままユーザーの目に入る。** モデルが前置きを
+    付けたり、思考のタグを漏らしたり、箇条書きにしたりしたら、素の文章の
+    ほうがまだよい。判定できないものは受け入れない側に倒す。
+    """
+    refined = refined.strip()
+    if not refined:
+        return False
+    if len(refined) > max(len(original) * MAX_GROWTH, 40):
+        return False
+    if any(mark in refined for mark in _SUSPICIOUS):
+        return False
+    # 1〜2文と指示している。句点が多すぎるなら説明が始まっている。
+    return refined.count("。") <= 3
+
+
 def refine(seed: IdeaSeed, text: str) -> tuple[str, str]:
     """種と素の文章を受け取り、`(文章, source)` を返す。
 
@@ -63,8 +89,10 @@ def refine(seed: IdeaSeed, text: str) -> tuple[str, str]:
             model=MODEL,
             max_tokens=512,
             system=SYSTEM,
-            # 短い創作なので思考は不要。effort high 以下でのみ disabled が許される。
-            thinking={"type": "disabled"},
+            # 思考は切らない。**Claude Opus 5 で thinking を disabled にすると、
+            # `<thinking>` タグが応答に漏れることがある。** ここは返ってきた
+            # 文字列をそのままアイデア本文にするので、漏れるとそのまま表に出る。
+            # 思考を残したまま effort を下げれば、それを避けつつ費用も下がる。
             output_config={"effort": "low"},
             messages=[{"role": "user", "content": _prompt(seed, text)}],
         )
@@ -75,7 +103,7 @@ def refine(seed: IdeaSeed, text: str) -> tuple[str, str]:
         refined = "".join(
             block.text for block in response.content if block.type == "text"
         ).strip()
-        if not refined:
+        if not usable(refined, text):
             return text, "engine"
         return refined, "llm"
     except Exception:
