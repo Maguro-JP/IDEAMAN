@@ -174,7 +174,6 @@ def test_every_suggested_command_is_a_real_command(tmp_path, monkeypatch):
     助言と実装は食い違う（材料を外させておいて、在庫はそのままだった）。
     目で読んでも気づけないので、機械で確かめる。
     """
-    import argparse
     import shlex
 
     from ideaman.cli import build_parser
