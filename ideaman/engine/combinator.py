@@ -28,6 +28,10 @@ SLOT_KINDS = {
     "operation_v": "verb",
 }
 
+#: 分野で絞った結果、これ未満しか残らないなら絞らない。
+#: 少なすぎる候補から引くと、分野の色ではなく同じ語の繰り返しになる。
+MIN_NARROWED = 4
+
 #: テンプレの needs にある名前 -> 引くべきプール名
 SLOT_TO_POOL = {
     "concept_a": "concepts",
@@ -132,30 +136,47 @@ def _pick_far_pair(
     return best
 
 
-def _pool_for_slot(lexicon: Lexicon, slot: str, pool_name: str) -> tuple[Term, ...]:
+def _pool_for_slot(
+    lexicon: Lexicon, slot: str, pool_name: str, domain: str | None = None
+) -> tuple[Term, ...]:
     """そのスロットに入れてよい語だけに絞ったプール。
 
     絞った結果が空になることは無いはず（語彙側で両方の形を用意している）
     だが、万一空になったら絞らずに返す——文が壊れるより、語が偏るほうが
     まだましなので。
+
+    分野の指定は**全てのプールに掛ける**。concepts だけに掛けていた頃は、
+    概念を使わないテンプレートが大半なので `domain` がほぼ効いていなかった
+    （60件中16件しか触れない、しかも同じ3語の繰り返し）。側面も操作も制約も
+    タグを持っているので、掛ければ分野の色が文全体に乗る。
     """
     kind = SLOT_KINDS.get(slot)
     pool = lexicon.pool(pool_name)
-    if kind is None:
-        return pool
-    narrowed = tuple(t for t in pool if t.kind == kind)
-    return narrowed or pool
+    if kind is not None:
+        pool = tuple(t for t in pool if t.kind == kind) or pool
+    return _filter_by_domain(pool, domain)
 
 
 def _filter_by_domain(terms: tuple[Term, ...], domain: str | None) -> tuple[Term, ...]:
-    """分野指定があれば、そのタグを持つ語に絞る。
+    """分野指定があれば、そのタグを持つ語に寄せる。
 
-    絞り込んだ結果が2語未満になる場合は、偏りすぎを避けるため絞らない。
+    **排他ではなく偏り。** タグ付きの語だけに絞ると、候補が2〜3語しかない
+    分野で同じ語が繰り返される（実際「まず1日だけその運用にしてみる」が3件
+    続いた）。分野特化ではなく故障に見える。
+
+    そこで、タグ付きが `MIN_NARROWED` に満たないときは、足りない分を
+    タグ無しの語で埋める。タグ付きの語は候補の中で厚くなるので偏りは残り、
+    同じ文の繰り返しは避けられる。
     """
     if domain is None:
         return terms
     narrowed = tuple(t for t in terms if domain in t.domains)
-    return narrowed if len(narrowed) >= 2 else terms
+    if not narrowed:
+        return terms
+    if len(narrowed) >= MIN_NARROWED:
+        return narrowed
+    others = tuple(t for t in terms if domain not in t.domains)
+    return narrowed + others[: MIN_NARROWED - len(narrowed)]
 
 
 def _pick_inherited(
@@ -299,7 +320,7 @@ def combine(
         pool_name = SLOT_TO_POOL.get(slot)
         if pool_name is None:
             raise ValueError(f"未知のスロット {slot!r} (template={template.id})")
-        pool = _pool_for_slot(lexicon, slot, pool_name)
+        pool = _pool_for_slot(lexicon, slot, pool_name, domain)
         kept = take_carried(pool_name)
         if kept is not None and kept not in {t.term for t in pool}:
             # 引き継いだ語がこのスロットの形に合わない（名詞句のスロットに

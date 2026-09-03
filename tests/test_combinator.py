@@ -77,7 +77,13 @@ def test_domain_filter_biases_concepts():
         used |= {v for k, v in seed.slots.items() if k.startswith("concept")}
 
     assert used, "concept が一つも使われていない"
-    assert used <= tagged, f"分野外の語が混ざった: {used - tagged}"
+    # 排他ではなく偏り。タグ付きが2〜3語しかない分野で絞り切ると、同じ語が
+    # 繰り返されて分野特化ではなく故障に見えるため、足りない分は埋める。
+    assert used & tagged, f"分野の語が一つも出ていない: {used}"
+    share = len(used & tagged) / len(used)
+    assert share > len(tagged) / len(lexicon.pool("concepts")), (
+        f"分野を指定しても偏りが出ていない: {share:.0%}"
+    )
 
 
 def test_unknown_domain_falls_back_instead_of_erroring():
@@ -90,3 +96,72 @@ def test_unknown_domain_falls_back_instead_of_erroring():
 def test_tone_filter():
     for i in range(20):
         assert combine(seed=i, tone="question").tone == "question"
+
+
+# --- 分野の指定 ----------------------------------------------------------
+# `?domain=` は API・CLI・MCP すべてで宣伝しているが、フィルタが concepts に
+# しか掛かっていなかった。概念を使わないテンプレートが大半なので、指定しても
+# 60件中16件しか触れず、しかも同じ3語の繰り返しだった。
+
+
+def _tagged(domain: str) -> set[str]:
+    from ideaman.engine.lexicon import POOL_NAMES, default_lexicon
+
+    lexicon = default_lexicon()
+    return {
+        t.term
+        for pool in POOL_NAMES
+        for t in lexicon.pool(pool)
+        if domain in t.domains
+    }
+
+
+def test_domain_reaches_every_pool_not_just_concepts():
+    tagged = _tagged("time")
+    assert tagged
+
+    def share(domain):
+        hits = 0
+        for i in range(120):
+            seed = combine(seed=i, domain=domain, materials=["通知", "語彙"])
+            if any(term in tagged for _, term in seed.terms):
+                hits += 1
+        return hits / 120
+
+    assert share("time") > share(None) + 0.15, "分野を指定しても偏りが変わらない"
+
+
+def test_a_thin_domain_does_not_collapse_to_the_same_word():
+    """候補が少ない分野では、絞らずに幅を優先する。
+
+    2語しか残らない分野で同じ語を繰り返すと、分野特化ではなく故障に見える
+    （実際「まず1日だけその運用にしてみる」が3件続いた）。
+    """
+    from ideaman.engine import templates
+    from ideaman.engine.lexicon import default_lexicon
+
+    lexicon = default_lexicon()
+    probes = set()
+    for i in range(120):
+        seed = combine(seed=i, domain="analog", materials=["通知"])
+        if "probe" in seed.slots:
+            probes.add(seed.slots["probe"])
+        templates.render(seed, lexicon)
+    assert len(probes) >= 4, f"試し方が {probes} に固まっている"
+
+
+def test_no_doubled_tokoro():
+    """「特に一番遅いところのところ」を出さないこと。
+
+    側面に「〜ところ」「〜部分」があるので、テンプレート側で「のところ」を
+    付けると重なる。分野を絞ったときに集中して初めて目についた。
+    """
+    from ideaman.engine import templates
+    from ideaman.engine.lexicon import default_lexicon
+
+    lexicon = default_lexicon()
+    for i in range(600):
+        for materials in (["通知"], []):
+            text = templates.render(combine(seed=i, materials=materials), lexicon)
+            assert "ところのところ" not in text, text
+            assert "部分のところ" not in text, text

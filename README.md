@@ -175,8 +175,11 @@ ideaman doctor
    「{concept}のやり方を{material}に持ち込む」と聞かれても持ち込むものが無い
    (`engine/combinator.py`)。テーマが登録されていれば、片側は**あなたの材料**
    になる（`あなたの材料 × 遠い概念`）
-3. テンプレートで日本語の一文にする (`data/templates.yaml`)
-4. `ANTHROPIC_API_KEY` があれば Claude が文章を磨く（**任意**。キーが無い・
+3. 分野を指定すると、**全てのプール**（概念・操作・制約・側面・試し方）が
+   その分野に寄る。**排他ではなく偏り**——タグ付きが2〜3語しかない分野で
+   絞り切ると同じ語が繰り返され、分野特化ではなく故障に見えるため
+4. テンプレートで日本語の一文にする (`data/templates.yaml`)
+5. `ANTHROPIC_API_KEY` があれば Claude が文章を磨く（**任意**。キーが無い・
    失敗したときはテンプレート出力をそのまま使う）
 
 生成されたアイデアは `unseen`（溜まっている考え）として SQLite に保存される。
@@ -388,11 +391,11 @@ LLM は**オプション**であって前提ではない。
 
 | | |
 | --- | --- |
-| `POST /api/idea` | 溜まっている考えを1つ受け取る（空なら即時生成）。`?domain=` で分野指定 |
+| `POST /api/idea` | 溜まっている考えを1つ受け取る（空なら即時生成）。`?domain=` で分野に寄せる |
 | `POST /api/idea/{id}/rate` | `{"score": 1｜0｜-1, "note": "..."}` |
 | `GET /api/ideas` | 蓄積一覧（新しい順） |
 | `GET /api/stock` | 在庫件数 |
-| `GET /api/domains` | 分野タグの一覧 |
+| `GET /api/domains` | 分野タグの一覧（`?domain=` に渡せる値） |
 | `GET /api/themes` | テーマと材料の一覧 |
 | `POST /api/themes` | `{"name", "note", "materials": [...], "scan": "パス"}`（同名なら材料を足す。`scan` でディレクトリから自動収集） |
 | `POST /api/themes/{id}/active?active=` | そのテーマを休ませる / 再開する |

@@ -32,7 +32,7 @@ templates:
   - id: borrow_from
     tone: proposal
     needs: [material, concept_a, aspect, probe]
-    text: "{concept_a}のやり方を{material}に持ち込む。特に{aspect}のところ。まず{probe}。"
+    text: "{concept_a}のやり方を{material}に持ち込む。見るのは{aspect}。まず{probe}。"
 
   - id: constrained_rebuild
     tone: proposal
@@ -97,7 +97,7 @@ templates:
   - id: bare_collision
     tone: proposal
     needs: [concept_a, concept_b, aspect, probe]
-    text: "{concept_a}のやり方を{concept_b}に持ち込む。特に{aspect}のところ。まず{probe}。"
+    text: "{concept_a}のやり方を{concept_b}に持ち込む。見るのは{aspect}。まず{probe}。"
 
   # フォールバックにも operation を使う型を残す。これが無いと、テーマ未登録の
   # 間だけ operations プールが丸ごと死ぬ（テストが捕まえた）。
