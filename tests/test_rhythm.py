@@ -403,3 +403,23 @@ def test_what_total_dormancy_costs(tmp_path):
         assert favourite_share() == 1.0
     finally:
         store.close()
+
+
+def test_the_revival_boost_does_not_stay_on_forever():
+    """連鎖で明けた語の下駄は、明けた直後だけ。
+
+    時計が来るまで乗せ続けると、その語だけが延々と目立つ。実際に
+    動かしたとき、一つの側面が14件中6件に出た。
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from ideaman.engine import rhythm
+
+    slept = datetime(2026, 1, 1, tzinfo=UTC)
+    until = rhythm.dormancy_for(0, now=slept)
+    soon = slept + timedelta(minutes=1)
+    just_woke = rhythm.DORMANCY_CHAINS
+
+    assert rhythm.draw_weight(1.0, until, chains_since=just_woke, now=soon) > 1.0
+    later = just_woke + rhythm.REVIVAL_WINDOW_CHAINS + 1
+    assert rhythm.draw_weight(1.0, until, chains_since=later, now=soon) == 1.0

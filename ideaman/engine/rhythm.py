@@ -86,6 +86,12 @@ REVIVAL_BOOST = 1.4
 #: 休眠明けからこの時間だけ REVIVAL_BOOST が効く。
 REVIVAL_WINDOW = timedelta(hours=12)
 
+#: 連鎖で明けた語に下駄を乗せる、そのあとの連鎖の本数。
+#: **時計側の窓をそのまま使ってはいけない。** 連鎖で明けた語は
+#: `dormant_until` を過ぎるまで（最大6時間）ずっと下駄が乗り続け、
+#: 引かれるほど目立つようになる。実際「頻度」が14件中6件に出た。
+REVIVAL_WINDOW_CHAINS = 2
+
 
 @dataclass(frozen=True)
 class ThoughtState:
@@ -298,7 +304,10 @@ def draw_weight(
     if now < dormant_until:
         # 時計はまだだが、ほかの連鎖を十分に挟んで戻ってきた。
         # 「ふとしたときに思いつく」のはここでも同じなので下駄を乗せる。
-        return weight * REVIVAL_BOOST
+        # ただし**明けた直後の数本だけ**。時計が来るまで乗せ続けると、
+        # その語だけが延々と目立つ。
+        overshoot = (chains_since or 0) - dormancy_chains_for(stall_count)
+        return weight * REVIVAL_BOOST if overshoot <= REVIVAL_WINDOW_CHAINS else weight
 
     if now - dormant_until <= REVIVAL_WINDOW:
         # 明けたばかり。「ふとしたときに思いつく」ための下駄。
