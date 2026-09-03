@@ -1,18 +1,24 @@
 # ブラウザで Web UI を触る。
 #
-# Chromium の取得と apt が要るので**一番高い**。UI に関わるものが変わった
-# ときだけ走らせる。それ以外の変更で毎回動かす価値はない。
+# Chromium の取得と apt が要るので**一番高い**。
+#
+# `pull_request` + `paths` は使わない。**paths は PR 全体の差分で判定する**
+# ので、その PR で一度でも UI を触っていれば、以後どの push でも走る。
+# 実際そうなっていた（service.py だけ直した push でも動いた）。
+#
+# 代わりに main への取り込み時と手動起動だけにする。PR 中は手元で
+# `pytest tests/test_web_ui.py` を回して確かめる。
 
 name: browser
 
 on:
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - "ideaman/static/**"
       - "ideaman/app.py"
       - "tests/test_web_ui.py"
       - ".github/workflows/browser.yml"
-  # 手で走らせたいとき用。
   workflow_dispatch:
 
 concurrency:

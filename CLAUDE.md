@@ -99,8 +99,12 @@ CI（`.github/workflows/check.yml`）は**1ジョブに畳んである**。同�
 - マトリクスは使わない。宣言している下限（3.11）1本。ここで通れば
   新しい版でも通るし、新しい構文をうっかり使えばここで落ちる
 - `concurrency` で、続けて push したら古い実行を止める
-- ブラウザのテストは別ファイル（`browser.yml`）にして、**UI に関わるものが
-  変わったときだけ**走らせる。Chromium の取得と apt が要るので一番高い
+- ブラウザのテストは別ファイル（`browser.yml`）。**main への取り込み時と
+  手動起動だけ**。Chromium の取得と apt が要って一番高い。
+  `pull_request` + `paths` にしてはいけない——**paths は PR 全体の差分で
+  判定する**ので、その PR で一度でも UI を触っていれば以後どの push でも
+  走る（実際そうなった）。PR 中は手元で
+  `pytest tests/test_web_ui.py` を回す
 
 リンタが正しいとは限らない。`SIM118` は `"mood" in row.keys()` から
 `.keys()` を外せと言うが、`sqlite3.Row` の `in` は**列名ではなく値**を
