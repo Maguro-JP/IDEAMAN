@@ -1,0 +1,381 @@
+"""語の衝突を作る抽選エンジン。
+
+「AI が質問に答える」のではなく「普段結びつかないものが偶然ぶつかる」ことで
+きっかけを生む。そのため素直な重み付きランダムではなく、候補を複数回引いて
+**互いの分野タグが遠い組**を選ぶ。
+"""
+
+from __future__ import annotations
+
+import random
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+
+from .lexicon import Lexicon, Template, Term, default_lexicon
+
+#: 1回の抽選で試す候補の数。多いほど「遠い組」が選ばれやすくなるが、
+#: 大きすぎると毎回似たような最遠ペアに収束するので控えめにする。
+CANDIDATE_TRIES = 6
+
+#: スロット名 -> そこに入れてよい語の形。
+#: 名詞句と疑問節を混ぜると「連鎖の誰が決めるかを取り除く」のような
+#: 壊れた日本語が出るので、スロットの側で形を決める。
+SLOT_KINDS = {
+    "aspect": "noun",
+    "aspect_q": "clause",
+    # 「{aspect}を{operation_v}」に入れられるのは、自分の目的語を持たない
+    # 動詞だけ。「頻度を主役と脇役を入れ替える」は「を」が二重になる。
+    "operation_v": "verb",
+}
+
+#: 連鎖が持ち越すべき「主題」のプール。ここにある語は何についての思考かを
+#: 決める。provocations / probes / operations は言い回しと段取りなので、
+#: 引き継ぐと「同じ問いが話題を変えて繰り返される」形になる。
+SUBJECT_POOLS = frozenset({"materials", "concepts", "aspects"})
+
+#: 分野で絞った結果、これ未満しか残らないなら絞らない。
+#: 少なすぎる候補から引くと、分野の色ではなく同じ語の繰り返しになる。
+MIN_NARROWED = 4
+
+#: テンプレの needs にある名前 -> 引くべきプール名
+SLOT_TO_POOL = {
+    "concept_a": "concepts",
+    "concept_b": "concepts",
+    "operation": "operations",
+    "operation_v": "operations",
+    "constraint": "constraints",
+    "provocation": "provocations",
+    "aspect": "aspects",
+    # 同じプールから引くが、引ける語の形が違う（下の SLOT_KINDS）。
+    "aspect_q": "aspects",
+    "probe": "probes",
+    # material はプールから引かない。呼び出し側が渡すテーマの材料を使う。
+    "material": "materials",
+}
+
+
+@dataclass(frozen=True)
+class IdeaSeed:
+    """アイデアの構造化された種。
+
+    同じ seed と同じ語彙なら同じ文章が再現できる。
+    """
+
+    template_id: str
+    tone: str
+    slots: dict[str, str]
+    domain: str | None
+    mood: str
+    seed: int
+    #: 抽選に使われた語を (プール名, 語) の形で持つ。評価による重み更新で使う。
+    terms: tuple[tuple[str, str], ...] = field(default=())
+    #: 引いた概念同士の遠さ（0〜1）。連想を始めるかの判断に使う。
+    novelty: float = 0.0
+
+    #: 署名に数えないプール。**発想の中身ではない**もの。
+    #: probes は「まず何で試すか」であって、試し方が違うだけの2件は
+    #: 読み手にとって同じ発想（実際「Botで誰が得をしているか」が probe
+    #: 違いで2件出ていた）。
+    #: 発想の中身ではないプール。署名に数えず、評価でも重みを動かさない。
+    #: 「まず15分だけ試す」は**言い方**であって思いつきではないので、
+    #: 👍 をこれの手柄にすると、当たった発想の道連れで太っていく。
+    #: 実測で 4.64（他は約1.0、上限5.0）まで走り、選ばれた案の probe の
+    #: 49% が同じ一文になっていた。署名から外してあるぶん、反復抑制でも
+    #: 見えない——止めるものが無かった。
+    SIGNATURE_IGNORED_POOLS = frozenset({"probes"})
+
+    @property
+    def signature(self) -> str:
+        """同じ組み合わせに再到達したかを判定するための署名。
+
+        テンプレートと、発想を担う語の集合だけで決まる。語順やシードは
+        含めない（「星座と手紙」と「手紙と星座」は同じ発想）。
+        """
+        terms = sorted(
+            f"{pool}:{term}"
+            for pool, term in self.terms
+            if pool not in self.SIGNATURE_IGNORED_POOLS
+        )
+        return f"{self.template_id}|" + "|".join(terms)
+
+
+def _weighted_choice(
+    rng: random.Random, terms: tuple[Term, ...], weights: dict[str, float]
+) -> Term:
+    ws = [max(weights.get(t.term, 1.0), 0.0) for t in terms]
+    if sum(ws) <= 0:
+        return rng.choice(terms)
+    return rng.choices(terms, weights=ws, k=1)[0]
+
+
+def _distance(a: Term, b: Term) -> float:
+    """2語の「遠さ」。分野タグの重なりが少ないほど大きい。
+
+    Jaccard 距離。どちらもタグなしのときは中間値を返す（極端に優遇しない）。
+    """
+    da, db = set(a.domains), set(b.domains)
+    if not da and not db:
+        return 0.5
+    union = da | db
+    if not union:
+        return 0.5
+    return 1.0 - len(da & db) / len(union)
+
+
+def _pick_far_pair(
+    rng: random.Random, terms: tuple[Term, ...], weights: dict[str, float]
+) -> tuple[Term, Term]:
+    """互いに遠い2語を選ぶ。"""
+    if len(terms) < 2:
+        raise ValueError("ペアを作るには2語以上必要です")
+
+    best: tuple[Term, Term] | None = None
+    best_score = -1.0
+    for _ in range(CANDIDATE_TRIES):
+        a = _weighted_choice(rng, terms, weights)
+        b = _weighted_choice(rng, terms, weights)
+        if a.term == b.term:
+            continue
+        score = _distance(a, b)
+        if score > best_score:
+            best, best_score = (a, b), score
+
+    if best is None:
+        # 全試行が同じ語を引いた場合のフォールバック
+        a, b = rng.sample(terms, 2)
+        best = (a, b)
+    return best
+
+
+def _pool_for_slot(
+    lexicon: Lexicon, slot: str, pool_name: str, domain: str | None = None
+) -> tuple[Term, ...]:
+    """そのスロットに入れてよい語だけに絞ったプール。
+
+    絞った結果が空になることは無いはず（語彙側で両方の形を用意している）
+    だが、万一空になったら絞らずに返す——文が壊れるより、語が偏るほうが
+    まだましなので。
+
+    分野の指定は**全てのプールに掛ける**。concepts だけに掛けていた頃は、
+    概念を使わないテンプレートが大半なので `domain` がほぼ効いていなかった
+    （60件中16件しか触れない、しかも同じ3語の繰り返し）。側面も操作も制約も
+    タグを持っているので、掛ければ分野の色が文全体に乗る。
+    """
+    kind = SLOT_KINDS.get(slot)
+    pool = lexicon.pool(pool_name)
+    if kind is not None:
+        pool = tuple(t for t in pool if t.kind == kind) or pool
+    return _filter_by_domain(pool, domain)
+
+
+def _without(terms: tuple[Term, ...], avoid: set[str]) -> tuple[Term, ...]:
+    """すでに使った語を候補から外す。
+
+    外した結果が空になったら外さない——語が被るより、文が作れないほうが困る。
+    """
+    if not avoid:
+        return terms
+    kept = tuple(t for t in terms if t.term not in avoid)
+    return kept or terms
+
+
+def _filter_by_domain(terms: tuple[Term, ...], domain: str | None) -> tuple[Term, ...]:
+    """分野指定があれば、そのタグを持つ語に寄せる。
+
+    **排他ではなく偏り。** タグ付きの語だけに絞ると、候補が2〜3語しかない
+    分野で同じ語が繰り返される（実際「まず1日だけその運用にしてみる」が3件
+    続いた）。分野特化ではなく故障に見える。
+
+    そこで、タグ付きが `MIN_NARROWED` に満たないときは、足りない分を
+    タグ無しの語で埋める。タグ付きの語は候補の中で厚くなるので偏りは残り、
+    同じ文の繰り返しは避けられる。
+    """
+    if domain is None:
+        return terms
+    narrowed = tuple(t for t in terms if domain in t.domains)
+    if not narrowed:
+        return terms
+    if len(narrowed) >= MIN_NARROWED:
+        return narrowed
+    others = tuple(t for t in terms if domain not in t.domains)
+    return narrowed + others[: MIN_NARROWED - len(narrowed)]
+
+
+def _pick_inherited(
+    rng: random.Random,
+    inherit: Sequence[tuple[str, str]],
+    count: int,
+    usable_pools: set[str],
+) -> dict[str, list[str]]:
+    """引き継ぐ語を、プール名ごとに分けて返す。
+
+    **今回のテンプレートが実際に使うプールの語だけを候補にする。** これを
+    しないと、引き継いだつもりの語が使われず、連鎖が名ばかりになる
+    （親子として記録されているのに一語も共有していない状態）。
+
+    そのうえで、**主題を担う語を優先して引き継ぐ**（`SUBJECT_POOLS`）。
+    問いかけや試し方を引き継ぐと、話題は毎回変わるのに同じ問いが繰り返される
+    ——「逆に不便にしたらどうなるか」が全体の20%を占めていた。連鎖は主題に
+    ついてのものであって、問いの形についてのものではない。
+    """
+    if count <= 0 or not inherit:
+        return {}
+    usable = [(pool, term) for pool, term in inherit if pool in usable_pools]
+    if not usable:
+        return {}
+    subject = [pair for pair in usable if pair[0] in SUBJECT_POOLS]
+    # 主題の語だけで足りるなら、そちらから引く。足りなければ残りで補う。
+    if len(subject) >= count:
+        usable = subject
+    elif subject:
+        rest = [pair for pair in usable if pair[0] not in SUBJECT_POOLS]
+        usable = subject + rng.sample(rest, min(count - len(subject), len(rest)))
+    chosen = rng.sample(usable, min(count, len(usable)))
+    carried: dict[str, list[str]] = {}
+    for pool, term in chosen:
+        carried.setdefault(pool, []).append(term)
+    return carried
+
+
+def combine(
+    *,
+    lexicon: Lexicon | None = None,
+    weights: dict[str, float] | None = None,
+    domain: str | None = None,
+    tone: str | None = None,
+    seed: int | None = None,
+    inherit: Sequence[tuple[str, str]] = (),
+    inherit_count: int = 0,
+    materials: Sequence[str] = (),
+    mood: str | None = None,
+) -> IdeaSeed:
+    """語彙を衝突させて `IdeaSeed` を1つ作る。
+
+    Args:
+        lexicon: 使う語彙。省略時は既定の語彙。
+        weights: 語 -> 重み。評価によって育った値を渡す。未知の語は 1.0 扱い。
+            0.0 の語は抽選から外れる（休眠している語）。
+        domain: 分野を指定すると concepts をその分野に寄せる（Phase 3 の下地）。
+        tone: `oracle` / `proposal` / `question` のいずれか。省略時はランダム。
+        seed: 乱数シード。指定すると結果が決定的になる。
+        inherit: 直前のアイデアが使った (プール名, 語)。連想モードで持ち越す候補。
+        inherit_count: このうち何語を引き継ぐか。0 なら引き継がない（放浪）。
+        materials: いま取り組んでいるテーマの材料（例: 通知, 会議）。
+            **これが有益さの源**。汎用の概念だけを衝突させても宙に浮いた
+            警句にしかならないので、片方をユーザー自身の語にする。
+            空のときは material を使わないテンプレートに限定される。
+        mood: この思考の気分。**連鎖に属する**もので、呼び出し側（`service`）が
+            連鎖の始まりに決めて最後まで渡す。省略するとその場で引く。
+
+    Returns:
+        文章化前の構造化された種。
+    """
+    lexicon = lexicon or default_lexicon()
+    weights = weights or {}
+    if seed is None:
+        seed = random.randrange(2**31)
+    rng = random.Random(seed)
+
+    candidates = lexicon.templates_for(tone)
+    if not candidates:
+        candidates = lexicon.templates
+    if materials:
+        # 材料があるなら、それを使うテンプレートを優先する。汎用の概念だけの
+        # フォールバックは、テーマが無いときのためのもの。
+        grounded = [t for t in candidates if "material" in t.needs]
+        candidates = grounded or candidates
+    else:
+        # 材料が無いなら material を使うテンプレートは埋められない。
+        usable = [t for t in candidates if "material" not in t.needs]
+        candidates = usable or [
+            t for t in lexicon.templates if "material" not in t.needs
+        ]
+    template: Template = rng.choice(candidates)
+
+    usable_pools = {
+        SLOT_TO_POOL[slot] for slot in template.needs if slot in SLOT_TO_POOL
+    }
+    carried = _pick_inherited(rng, inherit, inherit_count, usable_pools)
+    slots: dict[str, str] = {}
+    used: list[tuple[str, str]] = []
+    # 概念を1つしか引かないテンプレートでは衝突の距離が測れない。0 にすると
+    # 「つまらない」と誤解されるので、測れない＝中立として 0.5 を既定にする
+    # （`_distance` がタグ無し同士に 0.5 を返すのと同じ考え方）。
+    novelty = 0.5
+
+    def take_carried(pool_name: str) -> str | None:
+        """そのプールに引き継ぎ語があれば1つ取り出す。"""
+        pending = carried.get(pool_name)
+        return pending.pop() if pending else None
+
+    # 材料を先に決める。**材料はユーザーの語彙なので、語彙プールと衝突しうる**
+    # （「通知」は材料にもなり concepts にも入っている）。先に決めておけば、
+    # あとの抽選から除外できる。これをしないと「通知と通知は、例外の扱いだけ
+    # 見れば同じではないか」「待ち時間を作り直すとしたら、待ち時間はどうなるか」
+    # が出る（3000件中32件で実際に出ていた）。
+    if "material" in template.needs:
+        kept = take_carried("materials")
+        chosen = kept or _weighted_choice(
+            rng, tuple(Term(term=m) for m in materials), weights
+        ).term
+        slots["material"] = chosen
+        used.append(("materials", chosen))
+    avoid = {slots["material"]} if "material" in slots else set()
+
+    # concepts は「遠い2語」をまとめて引く必要があるので先に処理する。
+    concept_slots = [s for s in template.needs if SLOT_TO_POOL.get(s) == "concepts"]
+    if concept_slots:
+        pool = _without(_filter_by_domain(lexicon.pool("concepts"), domain), avoid)
+        if len(concept_slots) >= 2:
+            # 片方だけ引き継ぐと「同じ題材を別の角度から見る」形になる。
+            # 両方引き継ぐと元と同じ組になるので、必ず片方は引き直す。
+            kept = take_carried("concepts")
+            if kept is not None:
+                other = _weighted_choice(rng, pool, weights)
+                for _ in range(CANDIDATE_TRIES):
+                    if other.term != kept:
+                        break
+                    other = _weighted_choice(rng, pool, weights)
+                if other.term == kept:
+                    other = next(t for t in pool if t.term != kept)
+                a_term, b_term = kept, other.term
+            else:
+                a, b = _pick_far_pair(rng, pool, weights)
+                a_term, b_term = a.term, b.term
+            slots["concept_a"], slots["concept_b"] = a_term, b_term
+            used += [("concepts", a_term), ("concepts", b_term)]
+            by_term = {t.term: t for t in pool}
+            if a_term in by_term and b_term in by_term:
+                novelty = _distance(by_term[a_term], by_term[b_term])
+        else:
+            kept = take_carried("concepts")
+            term = kept or _weighted_choice(rng, pool, weights).term
+            slots[concept_slots[0]] = term
+            used.append(("concepts", term))
+
+    for slot in template.needs:
+        if slot in slots:
+            continue
+        pool_name = SLOT_TO_POOL.get(slot)
+        if pool_name is None:
+            raise ValueError(f"未知のスロット {slot!r} (template={template.id})")
+        pool = _without(_pool_for_slot(lexicon, slot, pool_name, domain), avoid)
+        kept = take_carried(pool_name)
+        if kept is not None and kept not in {t.term for t in pool}:
+            # 引き継いだ語がこのスロットの形に合わない（名詞句のスロットに
+            # 疑問節が来た等）。引き継ぎを諦めて引き直す。
+            kept = None
+        term_text = kept or _weighted_choice(rng, pool, weights).term
+        slots[slot] = term_text
+        used.append((pool_name, term_text))
+
+    return IdeaSeed(
+        template_id=template.id,
+        tone=template.tone,
+        slots=slots,
+        domain=domain,
+        mood=mood or rng.choice(lexicon.moods),
+        seed=seed,
+        terms=tuple(used),
+        novelty=novelty,
+    )

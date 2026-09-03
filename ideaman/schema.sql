@@ -1,0 +1,119 @@
+-- IDEAMAN のスキーマ。起動時に毎回そのまま適用される。
+--
+-- state:
+--   unseen … 生成済みだがまだ誰も見ていない「溜まっている考え」
+--   seen   … 一度取り出された
+-- mood / parent_id は今は表示に使っていないが、Phase 5 の思考の連鎖のために
+-- 最初から持たせておく（後からのスキーマ変更を避ける）。
+
+CREATE TABLE IF NOT EXISTS ideas (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    text        TEXT    NOT NULL,
+    seed_json   TEXT    NOT NULL,
+    domain      TEXT,
+    template_id TEXT    NOT NULL,
+    tone        TEXT    NOT NULL,
+    mood        TEXT    NOT NULL,
+    source      TEXT    NOT NULL CHECK (source IN ('engine', 'llm')),
+    state       TEXT    NOT NULL DEFAULT 'unseen' CHECK (state IN ('unseen', 'seen')),
+    parent_id   INTEGER REFERENCES ideas (id),
+    created_at  TEXT    NOT NULL,
+    seen_at     TEXT,
+    -- 同じ組み合わせに再到達したかの判定に使う（テンプレID + ソート済みの語）
+    signature   TEXT,
+    -- 連鎖の識別子。同じ chain_id を持つものは一つの思考の流れ
+    chain_id    INTEGER,
+    -- associate（連想）か wander（放浪）か
+    mode        TEXT,
+    -- 連鎖が閉じたときの選別結果。
+    --   NULL     まだ判定していない（連鎖の途中＝独り言の最中）
+    --   chosen   選ばれた。配信・Web・MCP に出る
+    --   kept     選ばれなかった。捨てない。連鎖を辿れば読める
+    verdict     TEXT CHECK (verdict IS NULL OR verdict IN ('chosen', 'kept')),
+    -- 選別のときに付いたスコア。取り出す順序に使い、あとで選び方を検証できる
+    pick_score  REAL NOT NULL DEFAULT 0.0,
+    -- どのテーマについて考えたか。NULL はテーマ未登録時の汎用アイデア
+    theme_id    INTEGER REFERENCES themes (id)
+);
+
+
+CREATE TABLE IF NOT EXISTS ratings (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    idea_id    INTEGER NOT NULL REFERENCES ideas (id) ON DELETE CASCADE,
+    score      INTEGER NOT NULL CHECK (score IN (-1, 0, 1)),
+    note       TEXT,
+    created_at TEXT    NOT NULL
+);
+
+
+-- 語ごとの重み。評価が付くたびに増減し、次の抽選に反映される。
+-- これが「蓄積して育つ」の実体。
+--
+-- dormant_until は「頭の片隅に置いておく」ための休眠。捨てるのでも重みを
+-- 下げるのでもなく、しばらく抽選から外すだけ。時間が来れば戻ってくる。
+CREATE TABLE IF NOT EXISTS weights (
+    pool          TEXT NOT NULL,
+    term          TEXT NOT NULL,
+    weight        REAL NOT NULL DEFAULT 1.0,
+    dormant_until TEXT,
+    stall_count   INTEGER NOT NULL DEFAULT 0,
+    -- 何本目の連鎖で眠ったか。休眠は時間だけでなく、そのあとに
+    -- どれだけ考えたかでも明ける（回し続けると全部眠ってしまう）。
+    slept_at_chain INTEGER,
+    -- その語が何回の評価を通ったか。多く出た語ほど1回の重みを小さくする。
+    rated_count   INTEGER NOT NULL DEFAULT 0,
+    score_sum     REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (pool, term)
+);
+
+-- いま何を考えているかの状態。プロセスが落ちても続きから再開する。
+CREATE TABLE IF NOT EXISTS thought_state (
+    id           INTEGER PRIMARY KEY CHECK (id = 1),
+    mode         TEXT    NOT NULL DEFAULT 'wander' CHECK (mode IN ('associate', 'wander')),
+    chain_id     INTEGER,
+    chain_length INTEGER NOT NULL DEFAULT 0,
+    stale_hits   INTEGER NOT NULL DEFAULT 0,
+    -- 気分は連鎖に属する。一つの思考の流れは一つの調子で続く。
+    mood         TEXT    NOT NULL DEFAULT '',
+    updated_at   TEXT    NOT NULL
+);
+
+-- 全体のカウンタ。重複到達の回数など、行に紐づかない数を置く。
+CREATE TABLE IF NOT EXISTS counters (
+    name  TEXT PRIMARY KEY,
+    value INTEGER NOT NULL DEFAULT 0
+);
+
+-- 配信の記録。ワーカーが pending を書き、Bot が拾って投稿する
+-- プロセス間キューでもある（Redis 等を持ち込まないため）。
+CREATE TABLE IF NOT EXISTS deliveries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    idea_id     INTEGER NOT NULL REFERENCES ideas (id),
+    channel     TEXT    NOT NULL,
+    external_id TEXT,
+    state       TEXT    NOT NULL DEFAULT 'pending'
+                CHECK (state IN ('pending', 'sent', 'failed')),
+    created_at  TEXT    NOT NULL,
+    sent_at     TEXT
+);
+
+
+-- テーマ = いま取り組んでいること。
+-- これが無いと、システムは「何について考えればいいか」を知らないまま
+-- 汎用の語を衝突させるしかなく、詩は作れても有益なアイデアは作れない。
+CREATE TABLE IF NOT EXISTS themes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL UNIQUE,
+    note        TEXT,
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT    NOT NULL
+);
+
+-- テーマの材料。ユーザー自身の語彙（例: 通知, 語彙, 連鎖, 評価）。
+-- 汎用の概念と衝突させる「あなた側」の項がこれ。
+CREATE TABLE IF NOT EXISTS theme_terms (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    theme_id INTEGER NOT NULL REFERENCES themes (id) ON DELETE CASCADE,
+    term     TEXT    NOT NULL,
+    UNIQUE (theme_id, term)
+);

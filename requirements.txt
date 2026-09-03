@@ -1,0 +1,5 @@
+# Vercel の Python ランタイム用。
+# ローカル開発は pyproject.toml を使う（pip install -e .）。
+# ここには Web を出すのに要るものだけを書く（Bot / MCP / LLM は載せない）。
+fastapi>=0.110
+pyyaml>=6.0

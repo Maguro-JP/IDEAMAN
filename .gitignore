@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# 蓄積された考え（ローカルのもの）
+*.db
+*.db-journal
+
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# WAL モードが作る副ファイル
+*.db-wal
+*.db-shm
+
+# 取り寄せた配布物（依存は pip が入れる）
+*.whl
+*.tar.gz

@@ -1,0 +1,327 @@
+"""思考のリズム。
+
+多様性を常に強制するのは間違い。人の思考は一つのきっかけから連鎖的に広がり、
+掘り尽くしたところで別の場所へ移り、しばらくして戻ってくると新しい形で
+思いつく。ここはその切り替えだけを担当する。
+
+対応する既存研究:
+- 連鎖して一気に思いつく          … intensification / spreading activation
+- 収束したら離れる                … diversification への切り替え（タブーサーチ）
+- 禁じても良いものは通す          … aspiration criterion (Glover 1990)
+- 頭の片隅に置いて後で思いつく    … incubation effect (Sio & Ormerod 2009)
+
+判断は全部この場で完結する純粋関数にしてある。DB も乱数も触らない。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
+
+ASSOCIATE = "associate"
+WANDER = "wander"
+
+#: 気分 -> 寄せたい語調。連鎖はこの調子で続く。
+#: **強制ではなく偏り**（`MOOD_PULL`）。同じ調子だけが続くと単調になる。
+MOOD_TONE = {
+    "挑発": "question",
+    "逆説": "question",
+    "実務": "proposal",
+    "夢想": "proposal",
+}
+
+#: 気分の語調に従う確率。1.0 にすると連鎖が一本調子になる。
+MOOD_PULL = 0.75
+
+
+def tone_for(mood: str, roll: float) -> str | None:
+    """その気分が寄せたい語調。従わない回もある。
+
+    Args:
+        mood: 連鎖の気分。
+        roll: 0〜1 の乱数。`MOOD_PULL` 未満なら気分に従う。
+
+    Returns:
+        `proposal` / `question` / どちらでもよければ None。
+    """
+    tone = MOOD_TONE.get(mood)
+    if tone is None or roll >= MOOD_PULL:
+        return None
+    return tone
+
+#: 一つの連鎖の長さの上限。ここまで来たら鉱脈が太くても一度離れる。
+MAX_CHAIN_LENGTH = 7
+
+#: 連鎖の中で何回重複を引いたら「尽きた」と見なすか。
+#: 1 だと一度の偶然で連鎖が切れる。2 なら粘る。
+#:
+#: **測ってみると、この道はほとんど通らない。** 稼働中の DB で連鎖の
+#: 長さは 1 か 7 しか無かった（193本）。語彙が広いと完全一致の重複が
+#: まず起きないので、連鎖を終わらせているのは実際には
+#: `MAX_CHAIN_LENGTH` のほう。1 は放浪のまま連鎖にならなかったもの。
+#:
+#: 「連鎖の中でどれだけ掘り返したか」で測り直してみたが、連想は語を
+#: 1〜2個しか引き継がず残りは引き直すので、**連鎖の中は本当に重ならない**。
+#: 閾値を上げれば分布は動くが、それは尽きたことを見つけているのではなく
+#: 短い上限を別の名前で置いているだけだった（選ばれる数が 91 → 128 に
+#: 増えるので、質ではなく量が変わる）。分布を作るために閾値を合わせない。
+STALE_LIMIT = 2
+
+#: 放浪から連想へ移る確率の基礎値。
+#: striking な引きでも必ず連鎖が始まるわけではない（そういうものだと思う）。
+BASE_SPARK = 0.3
+
+#: 引いた語の重みがこれを超えていたら、掘る価値があると見なして確率を上げる。
+SPARK_WEIGHT = 1.3
+SPARK_WEIGHT_BONUS = 0.4
+
+#: 語同士がどれだけ離れているか（0〜1）。遠い組ほど「おっ」と思う。
+SPARK_NOVELTY = 0.9
+SPARK_NOVELTY_BONUS = 0.2
+
+#: どれだけ条件が揃っても、これ以上は連鎖を始めない。
+MAX_SPARK = 0.85
+
+#: 休眠の基本の長さ。行き詰まった回数に応じて伸びる。
+BASE_DORMANCY = timedelta(hours=6)
+MAX_DORMANCY = timedelta(days=7)
+
+#: 休眠中でもこの重みを超えていれば抽選に戻す（aspiration criterion）。
+#: 「連続がダメなのではない」— 十分に良いものは禁を破ってよい。
+ASPIRATION_WEIGHT = 2.0
+
+#: 休眠明けの語を少しだけ引きやすくする倍率。
+#: 「ふとしたときに思いつく」を意図的に作るための下駄。
+REVIVAL_BOOST = 1.4
+
+#: 休眠明けからこの時間だけ REVIVAL_BOOST が効く。
+REVIVAL_WINDOW = timedelta(hours=12)
+
+#: 連鎖で明けた語に下駄を乗せる、そのあとの連鎖の本数。
+#: **時計側の窓をそのまま使ってはいけない。** 連鎖で明けた語は
+#: `dormant_until` を過ぎるまで（最大6時間）ずっと下駄が乗り続け、
+#: 引かれるほど目立つようになる。実際「頻度」が14件中6件に出た。
+REVIVAL_WINDOW_CHAINS = 2
+
+
+@dataclass(frozen=True)
+class ThoughtState:
+    """いま何を考えているか。"""
+
+    mode: str = WANDER
+    chain_id: int | None = None
+    chain_length: int = 0
+    stale_hits: int = 0
+    #: いまの思考の気分。**アイデアではなく連鎖に属する。**
+    #: 一つの思考の流れは一つの調子で続くもので、一手ごとに提案と問いが
+    #: 入れ替わるのは連鎖ではなく交替。空なら気分なし（従来どおり）。
+    mood: str = ""
+
+    @property
+    def is_associating(self) -> bool:
+        return self.mode == ASSOCIATE
+
+
+@dataclass(frozen=True)
+class Step:
+    """次の一手をどう引くかの指示。
+
+    Attributes:
+        mode: 引き方。`associate` なら親の語を引き継ぐ。
+        inherit: 引き継ぐ語の数。`wander` なら 0。
+        state: この一手を反映した後の状態。
+    """
+
+    mode: str
+    inherit: int
+    state: ThoughtState
+
+
+def plan_step(state: ThoughtState) -> Step:
+    """いまの状態から、次の一手の引き方を決める。
+
+    連想中なら語を引き継ぎ、放浪中なら自由に引く。連鎖が上限に達していたら
+    ここで放浪へ戻す。
+    """
+    if state.is_associating and state.chain_length < MAX_CHAIN_LENGTH:
+        # 連鎖が進むほど引き継ぎを減らし、少しずつ話題をずらしていく
+        inherit = 2 if state.chain_length <= 2 else 1
+        return Step(mode=ASSOCIATE, inherit=inherit, state=state)
+    return Step(mode=WANDER, inherit=0, state=replace(state, mode=WANDER))
+
+
+def spark_chance(best_weight: float, novelty: float) -> float:
+    """この引きから連想を始める確率。
+
+    育った語（＝過去に評価された）を含むか、語同士が遠いか。どちらも
+    「おっ」と思う条件で、揃うほど掘りたくなる。ただし確実ではない。
+
+    重みによる学習がまだ無い立ち上げ直後でも連鎖が起きるよう、基礎値を
+    持たせてある（評価ゼロの状態で永久に放浪し続けるのを避けるため）。
+    """
+    chance = BASE_SPARK
+    if best_weight >= SPARK_WEIGHT:
+        chance += SPARK_WEIGHT_BONUS
+    if novelty >= SPARK_NOVELTY:
+        chance += SPARK_NOVELTY_BONUS
+    return min(chance, MAX_SPARK)
+
+
+def after_hit(
+    state: ThoughtState,
+    *,
+    chain_id: int,
+    best_weight: float,
+    novelty: float = 0.0,
+    roll: float = 1.0,
+) -> ThoughtState:
+    """新しいアイデアが出たときの状態遷移。
+
+    Args:
+        chain_id: 今回のアイデアが属する連鎖。
+        best_weight: 引いた語の重みの最大値。
+        novelty: 引いた語同士の遠さ（0〜1）。
+        roll: 0〜1 の乱数。`spark_chance` を下回れば連想を始める。
+            乱数はここでは引かない（この関数を決定的に保つため）。
+    """
+    if state.is_associating:
+        return replace(
+            state,
+            chain_length=state.chain_length + 1,
+            stale_hits=0,  # 新しいものが出たので粘りカウントは戻す
+        )
+
+    if roll < spark_chance(best_weight, novelty):
+        # 何かが引っかかった。ここから掘ってみる。
+        return ThoughtState(
+            mode=ASSOCIATE, chain_id=chain_id, chain_length=1, stale_hits=0
+        )
+
+    # ただの放浪。連鎖はまだ始まっていない。
+    return replace(state, mode=WANDER, chain_id=chain_id, chain_length=0, stale_hits=0)
+
+
+def after_duplicate(state: ThoughtState) -> ThoughtState:
+    """同じ組み合わせに再到達したときの状態遷移。
+
+    重複は失敗ではない。同じ場所に何度も辿り着くのは、そこに何かがある
+    という信号。ただし出力はしないので、粘りカウントだけ進める。
+    """
+    return replace(state, stale_hits=state.stale_hits + 1)
+
+
+def is_exhausted(state: ThoughtState) -> bool:
+    """この連鎖は掘り尽くしたか。
+
+    尽きたときだけ休眠と放浪へ切り替える。常時ではない。
+    """
+    if not state.is_associating:
+        return False
+    return state.stale_hits >= STALE_LIMIT or state.chain_length >= MAX_CHAIN_LENGTH
+
+
+def leave_chain(state: ThoughtState) -> ThoughtState:
+    """連鎖を離れて放浪へ戻る。"""
+    return ThoughtState(mode=WANDER, chain_id=None, chain_length=0, stale_hits=0)
+
+
+#: 休眠が明けるまでに、ほかに何本の連鎖を挟めばよいか。
+#: **時間だけで休眠を測ってはいけない。** 6時間というのは「1日に数回
+#: 思いつく人」の尺度で、ワーカーが在庫を埋めるあいだは数分で何十本も
+#: 連鎖が終わる。実測では 150 件生成した時点で**材料が10語中10語とも
+#: 眠っていた**——材料はこのシステムの有益さそのものなので、これは
+#: 「別のことを考えている」ではなく「考える材料が無い」状態だった。
+#: incubation が言っているのは間を空けることであって、時計ではない。
+DORMANCY_CHAINS = 3
+
+#: 連鎖で測るほうの上限。時間側の MAX_DORMANCY に対応する。
+MAX_DORMANCY_CHAINS = 48
+
+
+def dormancy_chains_for(stall_count: int) -> int:
+    """休眠を明けるのに必要な連鎖の本数。
+
+    時間と同じく、行き詰まりを重ねた語ほど長く寝かせる。
+    """
+    doublings = min(max(stall_count, 0), 8)
+    return min(DORMANCY_CHAINS * (2**doublings), MAX_DORMANCY_CHAINS)
+
+
+def dormancy_for(stall_count: int, *, now: datetime | None = None) -> datetime:
+    """休眠がいつ明けるか。
+
+    同じ語で何度も行き詰まるほど長く寝かせる。ただし上限があり、
+    永久に消えることはない。
+    """
+    now = now or datetime.now(UTC)
+    # 指数を先に頭打ちにする。stall_count は際限なく増えるので、
+    # 掛けてから min を取ると timedelta が溢れる。
+    doublings = min(max(stall_count, 0), 16)
+    span = min(BASE_DORMANCY * (2**doublings), MAX_DORMANCY)
+    return now + span
+
+
+def is_awake(
+    dormant_until: datetime | None,
+    stall_count: int,
+    chains_since: int | None,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """その語がもう起きているか。
+
+    **時間か、思考量か、どちらかが足りていれば起きる。** 止まっている
+    あいだは時計が、回っているあいだは連鎖の本数が効く。片方だけで
+    測ると、ゆっくり使う人には戻ってこず、回し続ける人には全部眠る。
+    """
+    if dormant_until is None:
+        return True
+    now = now or datetime.now(UTC)
+    if now >= dormant_until:
+        return True
+    if chains_since is None:
+        # どの連鎖で眠ったか分からない語（列を足す前に眠ったもの）。
+        # **時計だけで抑え込まない。** それは直したはずの振る舞いで、
+        # 抑え込むと移行した DB は数時間ぶん壊れたままになる。
+        return True
+    return chains_since >= dormancy_chains_for(stall_count)
+
+
+def draw_weight(
+    weight: float,
+    dormant_until: datetime | None,
+    *,
+    stall_count: int = 0,
+    chains_since: int | None = None,
+    now: datetime | None = None,
+) -> float:
+    """抽選に使う実効的な重み。
+
+    保存された重み（評価による学習の結果）はここでは書き換えない。
+    休眠と復帰の効果を、抽選のときだけ上に被せる。
+
+    Returns:
+        0.0 なら抽選から外れる。
+    """
+    now = now or datetime.now(UTC)
+
+    if dormant_until is None:
+        return weight
+
+    if not is_awake(dormant_until, stall_count, chains_since, now=now):
+        # 休眠中。ただし十分に良いものは通す（aspiration criterion）
+        return weight if weight >= ASPIRATION_WEIGHT else 0.0
+
+    if now < dormant_until:
+        # 時計はまだだが、ほかの連鎖を十分に挟んで戻ってきた。
+        # 「ふとしたときに思いつく」のはここでも同じなので下駄を乗せる。
+        # ただし**明けた直後の数本だけ**。時計が来るまで乗せ続けると、
+        # その語だけが延々と目立つ。
+        overshoot = (chains_since or 0) - dormancy_chains_for(stall_count)
+        return weight * REVIVAL_BOOST if overshoot <= REVIVAL_WINDOW_CHAINS else weight
+
+    if now - dormant_until <= REVIVAL_WINDOW:
+        # 明けたばかり。「ふとしたときに思いつく」ための下駄。
+        return weight * REVIVAL_BOOST
+
+    return weight

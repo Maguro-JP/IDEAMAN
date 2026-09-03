@@ -1,0 +1,44 @@
+# ブラウザで Web UI を触る。
+#
+# Chromium の取得と apt が要るので**一番高い**。
+#
+# `pull_request` + `paths` は使わない。**paths は PR 全体の差分で判定する**
+# ので、その PR で一度でも UI を触っていれば、以後どの push でも走る。
+# 実際そうなっていた（service.py だけ直した push でも動いた）。
+#
+# 代わりに main への取り込み時と手動起動だけにする。PR 中は手元で
+# `pytest tests/test_web_ui.py` を回して確かめる。
+
+name: browser
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ideaman/static/**"
+      - "ideaman/app.py"
+      - "tests/test_web_ui.py"
+      - ".github/workflows/browser.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: 依存とブラウザを入れる
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,ui]"
+          python -m playwright install --with-deps chromium
+      - name: ブラウザで触る
+        run: pytest -q tests/test_web_ui.py

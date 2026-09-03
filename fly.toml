@@ -1,0 +1,36 @@
+# Fly.io 用。`fly launch --no-deploy` の代わりにこれを置いてから
+# `fly volumes create ideaman_data --size 1` → `fly deploy`。
+#
+# 1台に Web とワーカーを同居させる。SQLite を共有する必要があるので、
+# プロセスを別マシンに分けてはいけない。
+
+app = "ideaman"
+primary_region = "nrt"  # 東京
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  IDEAMAN_DB = "/data/ideaman.db"
+  IDEAMAN_EMBED_WORKER = "1"
+  IDEAMAN_STOCK = "5"
+  IDEAMAN_SCHEDULE = "08:00,13:00,21:00"
+  PORT = "8000"
+
+# 溜めたアイデアと育った重みはここに残る。これが無いと Vercel と同じで
+# 再起動のたびに記憶を失う。
+[[mounts]]
+  source = "ideaman_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # 止めない。止めるとワーカーの思考も止まる。
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
