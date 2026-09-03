@@ -155,6 +155,7 @@ moods:
 
 # 対象のどの側面をいじるか。漠然と「Xを変える」ではなく側面を名指しする。
 aspects:
+  # 名詞句。「{aspect}を{操作}」のように動詞の目的語にできる。
   - {term: 順番, domains: [structure]}
   - {term: 頻度, domains: [time]}
   - {term: 入り口, domains: [ux]}
@@ -162,7 +163,6 @@ aspects:
   - {term: 待ち時間, domains: [time, ux]}
   - {term: 初期状態, domains: [structure]}
   - {term: 失敗したときの挙動, domains: [rule]}
-  - {term: 誰が決めるか, domains: [social, rule]}
   - {term: 名前, domains: [language]}
   - {term: 単位, domains: [structure]}
   - {term: 見た目, domains: [art, ux]}
@@ -173,6 +173,23 @@ aspects:
   - {term: 一番よく使う部分, domains: [ux]}
   - {term: 誰も見ていない部分, domains: [structure]}
   - {term: 一番お金がかかっている部分, domains: [economy]}
+  - {term: 一番遅いところ, domains: [time]}
+  - {term: やり直しのきかない部分, domains: [rule]}
+  - {term: 説明が一番長くなる部分, domains: [language, ux]}
+
+  - {term: 誰も使っていない部分, domains: [ux]}
+
+  # 疑問節（kind: clause）。「{material}の◯◯」「{material}で◯◯」の形で
+  # 埋め込み疑問になる語。**動詞の目的語にはできない**ので、専用の
+  # 問いテンプレート（needs に aspect_q）だけが使う。
+  # 構造ではなく力関係と経緯を突くので、問いとしては名詞句より強い。
+  - {term: 誰が決めるか, domains: [social, rule], kind: clause}
+  - {term: 誰が得をしているか, domains: [social, economy], kind: clause}
+  - {term: 誰が損をしているか, domains: [social, economy], kind: clause}
+  - {term: 何が一番よく壊れるか, domains: [rule], kind: clause}
+  - {term: 何が一番時間を食っているか, domains: [time], kind: clause}
+  - {term: なぜ二度手間になっているか, domains: [ux, structure], kind: clause}
+  - {term: 何を諦めて今の形になったか, domains: [rule, memory], kind: clause}
 
 # まず何で試すか。30分〜1日で終わる大きさに寄せる。
 # アイデアが「良さそうだが動けない」で終わるのを防ぐための欄。

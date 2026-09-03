@@ -24,9 +24,16 @@ SHORT_CHAIN = 3
 #: スコアの重み。
 #: 立ち上げ直後は評価が無いので実質 novelty しか効かない。評価が溜まると
 #: 重みが意味を持ち始める、という性質のもの。動かしてから調整する前提。
-W_NOVELTY = 0.5
-W_WEIGHT = 0.35
-W_DEVELOP = 0.15
+W_NOVELTY = 0.40
+W_WEIGHT = 0.28
+W_DEVELOP = 0.12
+#: 直近と同じ文型を避ける重み。**内容ではなく見え方の指標**だが、
+#: 毎日届く Bot では効き目が大きい。同じ骨格の文が続くと、違う話を
+#: していても壁紙になる。
+W_FRESH = 0.20
+
+#: 何件前までの文型を「最近使った」とみなすか。
+FRESHNESS_WINDOW = 8
 
 #: 重みの正規化に使う上限（store.MAX_WEIGHT と揃える）。
 WEIGHT_CEILING = 5.0
@@ -63,7 +70,20 @@ def score(store: Store, idea: Idea) -> float:
 
     developed = 1.0 if idea.parent_id is not None else 0.0
 
-    return W_NOVELTY * novelty + W_WEIGHT * grown + W_DEVELOP * developed
+    # 直近に使った文型ほど減点。すぐ前に使ったものが最も重い。
+    recent = store.recent_chosen_templates(FRESHNESS_WINDOW)
+    if idea.template_id in recent:
+        # 0 件前（直前）なら 0.0、窓の端なら 1.0 に近づく。
+        fresh = recent.index(idea.template_id) / len(recent)
+    else:
+        fresh = 1.0
+
+    return (
+        W_NOVELTY * novelty
+        + W_WEIGHT * grown
+        + W_DEVELOP * developed
+        + W_FRESH * fresh
+    )
 
 
 def pick_count(chain_length: int) -> int:

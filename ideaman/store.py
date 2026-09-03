@@ -75,6 +75,8 @@ class Idea:
     verdict: str | None = None
     pick_score: float = 0.0
     theme_id: int | None = None
+    #: 文章化に使った文型。同じ骨格を続けて出さないための判定に使う。
+    template_id: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -92,6 +94,7 @@ class Idea:
             "mode": self.mode,
             "verdict": self.verdict,
             "theme_id": self.theme_id,
+            "template_id": self.template_id,
         }
 
 
@@ -122,6 +125,11 @@ def _row_to_idea(row: sqlite3.Row) -> Idea:
         mode=row["mode"] if "mode" in keys else None,
         verdict=row["verdict"] if "verdict" in keys else None,
         theme_id=row["theme_id"] if "theme_id" in keys else None,
+        template_id=(
+            row["template_id"]
+            if "template_id" in keys and row["template_id"] is not None
+            else ""
+        ),
         pick_score=(
             row["pick_score"]
             if "pick_score" in keys and row["pick_score"] is not None
@@ -551,6 +559,20 @@ class Store:
             "SELECT * FROM ideas WHERE verdict IS NULL ORDER BY id"
         ).fetchall()
         return [_row_to_idea(row) for row in rows]
+
+    def recent_chosen_templates(self, limit: int = 8) -> list[str]:
+        """直近で表に出したアイデアの文型を、新しい順に返す。
+
+        同じ文型が続くと、内容が違っても読み手には同じものに見える
+        （「いちばんヘビーに使う一人のために◯◯を作り直す」が3回続く等）。
+        選ぶときにこれを避けるために使う。
+        """
+        rows = self.conn.execute(
+            "SELECT template_id FROM ideas WHERE verdict = 'chosen' "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [r["template_id"] for r in rows]
 
     def recent_scores(self, limit: int = 50) -> list[float]:
         """直近に判定したもののスコア。単発の思いつきを測る物差しに使う。"""

@@ -17,6 +17,14 @@ from .lexicon import Lexicon, Template, Term, default_lexicon
 #: 大きすぎると毎回似たような最遠ペアに収束するので控えめにする。
 CANDIDATE_TRIES = 6
 
+#: スロット名 -> そこに入れてよい語の形。
+#: 名詞句と疑問節を混ぜると「連鎖の誰が決めるかを取り除く」のような
+#: 壊れた日本語が出るので、スロットの側で形を決める。
+SLOT_KINDS = {
+    "aspect": "noun",
+    "aspect_q": "clause",
+}
+
 #: テンプレの needs にある名前 -> 引くべきプール名
 SLOT_TO_POOL = {
     "concept_a": "concepts",
@@ -25,6 +33,8 @@ SLOT_TO_POOL = {
     "constraint": "constraints",
     "provocation": "provocations",
     "aspect": "aspects",
+    # 同じプールから引くが、引ける語の形が違う（下の SLOT_KINDS）。
+    "aspect_q": "aspects",
     "probe": "probes",
     # material はプールから引かない。呼び出し側が渡すテーマの材料を使う。
     "material": "materials",
@@ -49,14 +59,24 @@ class IdeaSeed:
     #: 引いた概念同士の遠さ（0〜1）。連想を始めるかの判断に使う。
     novelty: float = 0.0
 
+    #: 署名に数えないプール。**発想の中身ではない**もの。
+    #: probes は「まず何で試すか」であって、試し方が違うだけの2件は
+    #: 読み手にとって同じ発想（実際「Botで誰が得をしているか」が probe
+    #: 違いで2件出ていた）。
+    SIGNATURE_IGNORED_POOLS = frozenset({"probes"})
+
     @property
     def signature(self) -> str:
         """同じ組み合わせに再到達したかを判定するための署名。
 
-        テンプレートと語の集合だけで決まる。語順やシードは含めない
-        （「星座と手紙」と「手紙と星座」は同じ発想）。
+        テンプレートと、発想を担う語の集合だけで決まる。語順やシードは
+        含めない（「星座と手紙」と「手紙と星座」は同じ発想）。
         """
-        terms = sorted(f"{pool}:{term}" for pool, term in self.terms)
+        terms = sorted(
+            f"{pool}:{term}"
+            for pool, term in self.terms
+            if pool not in self.SIGNATURE_IGNORED_POOLS
+        )
         return f"{self.template_id}|" + "|".join(terms)
 
 
@@ -106,6 +126,21 @@ def _pick_far_pair(
         a, b = rng.sample(terms, 2)
         best = (a, b)
     return best
+
+
+def _pool_for_slot(lexicon: Lexicon, slot: str, pool_name: str) -> tuple[Term, ...]:
+    """そのスロットに入れてよい語だけに絞ったプール。
+
+    絞った結果が空になることは無いはず（語彙側で両方の形を用意している）
+    だが、万一空になったら絞らずに返す——文が壊れるより、語が偏るほうが
+    まだましなので。
+    """
+    kind = SLOT_KINDS.get(slot)
+    pool = lexicon.pool(pool_name)
+    if kind is None:
+        return pool
+    narrowed = tuple(t for t in pool if t.kind == kind)
+    return narrowed or pool
 
 
 def _filter_by_domain(terms: tuple[Term, ...], domain: str | None) -> tuple[Term, ...]:
@@ -257,8 +292,13 @@ def combine(
         pool_name = SLOT_TO_POOL.get(slot)
         if pool_name is None:
             raise ValueError(f"未知のスロット {slot!r} (template={template.id})")
+        pool = _pool_for_slot(lexicon, slot, pool_name)
         kept = take_carried(pool_name)
-        term_text = kept or _weighted_choice(rng, lexicon.pool(pool_name), weights).term
+        if kept is not None and kept not in {t.term for t in pool}:
+            # 引き継いだ語がこのスロットの形に合わない（名詞句のスロットに
+            # 疑問節が来た等）。引き継ぎを諦めて引き直す。
+            kept = None
+        term_text = kept or _weighted_choice(rng, pool, weights).term
         slots[slot] = term_text
         used.append((pool_name, term_text))
 

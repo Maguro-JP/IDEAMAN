@@ -28,10 +28,21 @@ POOL_NAMES = (
 
 @dataclass(frozen=True)
 class Term:
-    """語彙プールの1語。"""
+    """語彙プールの1語。
+
+    `kind` は語の文法的な形。`aspects` でだけ意味を持つ:
+
+    - `noun`（既定）— 名詞句。「{aspect}を{操作}」に入れられる
+    - `clause` — 疑問節（「誰が決めるか」）。**「〜を取り除く」に入れると
+      日本語が壊れる**ので、問いの位置にしか置けない
+
+    この区別が無かったせいで「連鎖の誰が決めるかを自動で忘れさせる」の
+    ような文が出ていた。区別したことで、逆に疑問節系の語を増やせる。
+    """
 
     term: str
     domains: tuple[str, ...] = ()
+    kind: str = "noun"
 
 
 @dataclass(frozen=True)
@@ -61,7 +72,11 @@ class Lexicon:
 
 def _load_terms(raw: list[dict]) -> tuple[Term, ...]:
     return tuple(
-        Term(term=item["term"], domains=tuple(item.get("domains") or ()))
+        Term(
+            term=item["term"],
+            domains=tuple(item.get("domains") or ()),
+            kind=item.get("kind", "noun"),
+        )
         for item in raw
     )
 

@@ -36,23 +36,23 @@ templates:
 
   - id: remove_and_see
     tone: proposal
-    needs: [material, aspect, probe]
-    text: "{material}から{aspect}を丸ごと取り除いてみる。困る人がいるなら、そこが本体。まず{probe}。"
+    needs: [material, aspect]
+    text: "{material}から{aspect}を丸ごと取り除く。困る人がいれば、そこが本体。"
 
   - id: exaggerate
     tone: proposal
-    needs: [material, aspect, operation, probe]
-    text: "{material}の{aspect}だけを極端にする——{operation}くらいまで。壊れ方で設計が見える。まず{probe}。"
+    needs: [material, aspect, operation]
+    text: "{material}の{aspect}だけを極端にする。{operation}くらいまで。"
 
   - id: two_materials
     tone: proposal
-    needs: [material, concept_a, operation, probe]
-    text: "{material}と{concept_a}を同じ仕組みで扱えないか。鍵は「{operation}」こと。まず{probe}。"
+    needs: [material, concept_a, operation]
+    text: "{material}と{concept_a}を同じ仕組みで扱えないか。鍵は「{operation}」こと。"
 
   - id: for_one_person
     tone: proposal
-    needs: [material, aspect, probe]
-    text: "{material}を、いちばんヘビーに使う一人のためだけに作り直す。まず変わるのは{aspect}のはず。まず{probe}。"
+    needs: [material, aspect]
+    text: "いちばんヘビーに使う一人のためだけに{material}を作り直す。まず{aspect}が変わるはず。"
 
   # --- 問い ---------------------------------------------------------
   - id: question_aspect
@@ -63,12 +63,24 @@ templates:
   - id: question_assumption
     tone: question
     needs: [material, aspect]
-    text: "{material}の{aspect}は、なぜ今の形なのか。決めた理由をもう誰も覚えていないなら、変えていい。"
+    text: "{material}の{aspect}は、なぜ今の形なのか。"
+
+  # 疑問節専用。力関係と経緯を突く問い。名詞句の側面より刺さりやすい
+  # 一方、動詞の目的語にはできないのでここに閉じ込める。
+  - id: question_clause
+    tone: question
+    needs: [material, aspect_q]
+    text: "{material}について、{aspect_q}。いま答えられるか。"
+
+  - id: question_clause_probe
+    tone: question
+    needs: [material, aspect_q, probe]
+    text: "{material}で{aspect_q}。まず{probe}。"
 
   - id: question_absence
     tone: question
     needs: [material, concept_a]
-    text: "{concept_a}にあって{material}に無いものは何か。無いのは不要だからか、思いつかなかっただけか。"
+    text: "{concept_a}にあって{material}に無いものは何か。"
 
   - id: question_constrained
     tone: question

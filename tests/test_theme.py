@@ -109,3 +109,91 @@ def test_registered_theme_grounds_the_web_idea(client):
     )
     texts = [client.post("/api/idea").json()["text"] for _ in range(5)]
     assert any("通知" in text for text in texts)
+
+
+# --- 日本語が壊れないこと ------------------------------------------------
+# 「連鎖の誰が決めるかを自動で忘れさせる」のような文が実際に出ていた。
+# 疑問節を動詞の目的語に入れたことが原因で、テンプレートを増やすたびに
+# 再発しうるので、テストで固定する。
+
+
+def _clause_terms():
+    from ideaman.engine.lexicon import default_lexicon
+
+    return {t.term for t in default_lexicon().pool("aspects") if t.kind == "clause"}
+
+
+def test_clause_aspects_never_land_in_a_noun_slot():
+    """疑問節は「〜を{操作}」の位置に来てはいけない。"""
+    from ideaman.engine.lexicon import default_lexicon
+
+    lexicon = default_lexicon()
+    clauses = _clause_terms()
+    assert clauses, "疑問節の語が一つも無い（分類が壊れている）"
+
+    for seed in range(300):
+        idea_seed = combine(materials=["通知"], seed=seed)
+        if "aspect" in idea_seed.slots:
+            assert idea_seed.slots["aspect"] not in clauses
+
+
+def test_every_template_can_be_rendered():
+    """全テンプレートが、必要な語を揃えて実際に文字列になること。"""
+    from ideaman.engine import templates
+    from ideaman.engine.lexicon import default_lexicon
+
+    lexicon = default_lexicon()
+    seen = set()
+    for seed in range(500):
+        for materials in (["通知"], []):
+            idea_seed = combine(materials=materials, seed=seed)
+            text = templates.render(idea_seed, lexicon)
+            assert text and "{" not in text
+            seen.add(idea_seed.template_id)
+    assert seen == {t.id for t in lexicon.templates}, "使われないテンプレートがある"
+
+
+def test_probe_does_not_change_the_signature():
+    """試し方が違うだけの2件は、同じ発想として扱う。
+
+    これが効かないと「Botで誰が得をしているか」が probe 違いで
+    何度も表に出る。
+    """
+    a = combine(materials=["通知"], seed=7)
+    if "probe" not in a.slots:
+        return  # probe を使わない型が引かれた回は対象外
+    b_slots = dict(a.slots)
+    b_slots["probe"] = "まったく別の試し方"
+    from dataclasses import replace
+
+    b = replace(
+        a,
+        slots=b_slots,
+        terms=tuple(
+            (pool, "まったく別の試し方" if pool == "probes" else term)
+            for pool, term in a.terms
+        ),
+    )
+    assert a.signature == b.signature
+
+
+def test_curator_avoids_repeating_the_same_sentence_shape(store):
+    """同じ文型が連続して選ばれ続けないこと。"""
+    from ideaman import curator
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖", "評価", "在庫"])
+    for _ in range(200):
+        service.generate_idea(store, use_llm=False)
+
+    chosen = sorted(
+        (i for i in store.search(None, limit=500) if i.verdict == "chosen"),
+        key=lambda i: i.id,
+    )
+    assert len(chosen) > 10
+    repeats = sum(
+        1 for a, b in zip(chosen, chosen[1:]) if a.template_id == b.template_id
+    )
+    # 完全に禁じはしない（良い案なら型が被っても出す）が、半分は超えない
+    assert repeats < len(chosen) / 2
+    assert curator.W_FRESH > 0
