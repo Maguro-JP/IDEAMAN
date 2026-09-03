@@ -3,6 +3,7 @@
     python -m ideaman idea            一つ受け取る
     python -m ideaman worker          常駐して考え続ける
     python -m ideaman worker --once   1周だけ
+    python -m ideaman doctor          設定を診断する
     python -m ideaman diversity       リズムの健康度を見る
     python -m ideaman chain <id>      連鎖を辿る
 """
@@ -14,7 +15,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import diversity, harvest, service
+from . import diversity, doctor, harvest, service
 from .notify import ConsoleNotifier, QueueNotifier
 from .store import Store
 from .worker import DEFAULT_STOCK, Worker
@@ -119,6 +120,18 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
     return 0
 
 
+def cmd_doctor(args: argparse.Namespace, store: Store) -> int:
+    """設定の健康診断。
+
+    このシステムは黙って劣化する（テーマ未登録なら警句しか出ない、DB が
+    揮発する場所なら毎回記憶を失う）。どれもエラーにならないので、
+    動いているように見えたまま役に立たなくなる。
+    """
+    result = doctor.diagnose(store)
+    print(result.report())
+    return 1 if result.worst == "bad" else 0
+
+
 def cmd_diversity(args: argparse.Namespace, store: Store) -> int:
     print(diversity.measure(store, limit=args.limit).report())
     return 0
@@ -186,6 +199,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_theme.add_argument("--off", action="store_true", help="このテーマを一旦休む")
     p_theme.add_argument("--on", action="store_true", help="再開する")
     p_theme.set_defaults(func=cmd_theme)
+
+    p_doc = sub.add_parser(
+        "doctor", help="設定を診断する（うまく出ないと感じたら最初にこれ）",
+        parents=[common],
+    )
+    p_doc.set_defaults(func=cmd_doctor)
 
     p_div = sub.add_parser("diversity", help="リズムの健康度を見る", parents=[common])
     p_div.add_argument("--limit", type=int, default=500)
