@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS thought_state (
     chain_id     INTEGER,
     chain_length INTEGER NOT NULL DEFAULT 0,
     stale_hits   INTEGER NOT NULL DEFAULT 0,
+    -- 気分は連鎖に属する。一つの思考の流れは一つの調子で続く。
+    mood         TEXT    NOT NULL DEFAULT '',
     updated_at   TEXT    NOT NULL
 );
 

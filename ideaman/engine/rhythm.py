@@ -21,6 +21,34 @@ from datetime import datetime, timedelta, timezone
 ASSOCIATE = "associate"
 WANDER = "wander"
 
+#: 気分 -> 寄せたい語調。連鎖はこの調子で続く。
+#: **強制ではなく偏り**（`MOOD_PULL`）。同じ調子だけが続くと単調になる。
+MOOD_TONE = {
+    "挑発": "question",
+    "逆説": "question",
+    "実務": "proposal",
+    "夢想": "proposal",
+}
+
+#: 気分の語調に従う確率。1.0 にすると連鎖が一本調子になる。
+MOOD_PULL = 0.75
+
+
+def tone_for(mood: str, roll: float) -> str | None:
+    """その気分が寄せたい語調。従わない回もある。
+
+    Args:
+        mood: 連鎖の気分。
+        roll: 0〜1 の乱数。`MOOD_PULL` 未満なら気分に従う。
+
+    Returns:
+        `proposal` / `question` / どちらでもよければ None。
+    """
+    tone = MOOD_TONE.get(mood)
+    if tone is None or roll >= MOOD_PULL:
+        return None
+    return tone
+
 #: 一つの連鎖の長さの上限。ここまで来たら鉱脈が太くても一度離れる。
 MAX_CHAIN_LENGTH = 7
 
@@ -67,6 +95,10 @@ class ThoughtState:
     chain_id: int | None = None
     chain_length: int = 0
     stale_hits: int = 0
+    #: いまの思考の気分。**アイデアではなく連鎖に属する。**
+    #: 一つの思考の流れは一つの調子で続くもので、一手ごとに提案と問いが
+    #: 入れ替わるのは連鎖ではなく交替。空なら気分なし（従来どおり）。
+    mood: str = ""
 
     @property
     def is_associating(self) -> bool:

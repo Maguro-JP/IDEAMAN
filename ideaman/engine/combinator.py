@@ -192,6 +192,7 @@ def combine(
     inherit: Sequence[tuple[str, str]] = (),
     inherit_count: int = 0,
     materials: Sequence[str] = (),
+    mood: str | None = None,
 ) -> IdeaSeed:
     """語彙を衝突させて `IdeaSeed` を1つ作る。
 
@@ -208,6 +209,8 @@ def combine(
             **これが有益さの源**。汎用の概念だけを衝突させても宙に浮いた
             警句にしかならないので、片方をユーザー自身の語にする。
             空のときは material を使わないテンプレートに限定される。
+        mood: この思考の気分。**連鎖に属する**もので、呼び出し側（`service`）が
+            連鎖の始まりに決めて最後まで渡す。省略するとその場で引く。
 
     Returns:
         文章化前の構造化された種。
@@ -311,7 +314,7 @@ def combine(
         tone=template.tone,
         slots=slots,
         domain=domain,
-        mood=rng.choice(lexicon.moods),
+        mood=mood or rng.choice(lexicon.moods),
         seed=seed,
         terms=tuple(used),
         novelty=novelty,

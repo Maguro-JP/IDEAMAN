@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+from dataclasses import replace
 
 from . import curator
 from .engine import rhythm, templates
@@ -65,6 +66,15 @@ def _draw(
     step = rhythm.plan_step(state)
     weights = store.draw_weights()
 
+    # 気分は連鎖に属する。放浪＝新しい流れの始まりなので、ここで決め直す。
+    # 一手ごとに提案と問いが入れ替わるのは連鎖ではなく交替なので、
+    # 気分が語調を引っぱる（ただし強制ではない）。
+    mood = step.state.mood
+    if step.mode == rhythm.WANDER or not mood:
+        mood = random.choice(lexicon.moods)
+    if tone is None:
+        tone = rhythm.tone_for(mood, random.random())
+
     parent: Idea | None = None
     inherit: tuple[tuple[str, str], ...] = ()
     if step.mode == rhythm.ASSOCIATE and state.chain_id is not None:
@@ -92,6 +102,7 @@ def _draw(
             inherit=inherit,
             inherit_count=step.inherit,
             materials=materials,
+            mood=mood,
         )
         if not store.signature_exists(idea_seed.signature):
             break
@@ -101,6 +112,8 @@ def _draw(
         duplicates += 1
 
     assert idea_seed is not None
+    step = rhythm.Step(mode=step.mode, inherit=step.inherit,
+                       state=replace(step.state, mood=mood))
     return idea_seed, step, parent, duplicates, theme_id
 
 
@@ -130,7 +143,7 @@ def generate_idea(
     # から磨く（`_close_chain`）。API 呼び出しが 1/4 以下になる。
     text = templates.render(idea_seed, lexicon)
 
-    state = store.thought_state()
+    state = replace(store.thought_state(), mood=step.state.mood)
     for _ in range(duplicates):
         state = rhythm.after_duplicate(state)
 

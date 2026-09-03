@@ -243,3 +243,52 @@ def test_sleeping_removes_terms_from_the_draw(store):
     weights = store.draw_weights()
     for _, term in seed.terms:
         assert weights[term] == 0.0
+
+
+# --- 気分は連鎖に属する --------------------------------------------------
+# 気分はもともとアイデアごとにランダムに引かれ、文章化には一切使われて
+# いなかった。連鎖の中で 82% の確率で変わっていて、一手ごとに提案と問いが
+# 入れ替わるので、連鎖ではなく交替として読めていた。
+
+
+def test_tone_for_pulls_towards_the_moods_register():
+    assert rhythm.tone_for("挑発", 0.0) == "question"
+    assert rhythm.tone_for("実務", 0.0) == "proposal"
+
+
+def test_tone_for_does_not_force():
+    """毎回従うと連鎖が一本調子になる。"""
+    assert rhythm.tone_for("挑発", 0.99) is None
+
+
+def test_moods_without_a_register_leave_the_tone_free():
+    assert rhythm.tone_for("静穏", 0.0) is None
+    assert rhythm.tone_for("", 0.0) is None
+    assert rhythm.tone_for("知らない気分", 0.0) is None
+
+
+def test_thought_state_remembers_the_mood(store):
+    state = rhythm.ThoughtState(mode=rhythm.ASSOCIATE, chain_id=3, mood="実務")
+    store.save_thought_state(state)
+    assert store.thought_state().mood == "実務"
+
+
+def test_a_chain_keeps_one_mood(store):
+    """一つの思考の流れは一つの調子で続くこと。"""
+    from ideaman import service
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖", "在庫", "評価"])
+    for _ in range(150):
+        service.generate_idea(store, use_llm=False)
+
+    chains: dict[int, list] = {}
+    for idea in sorted(store.search(None, limit=500), key=lambda i: i.id):
+        if idea.chain_id:
+            chains.setdefault(idea.chain_id, []).append(idea)
+
+    long = [v for v in chains.values() if len(v) >= 4]
+    assert long, "長い連鎖が一本もできていない"
+    steps = sum(len(v) - 1 for v in long)
+    flips = sum(sum(1 for a, b in zip(v, v[1:]) if a.mood != b.mood) for v in long)
+    assert flips / steps < 0.35, f"連鎖の中で気分が変わりすぎ: {flips / steps:.0%}"

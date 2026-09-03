@@ -211,6 +211,9 @@ class Store:
                 ("dormant_until", "TEXT"),
                 ("stall_count", "INTEGER NOT NULL DEFAULT 0"),
             ],
+            "thought_state": [
+                ("mood", "TEXT NOT NULL DEFAULT ''"),
+            ],
         }
         for table, columns in additions.items():
             existing = {
@@ -476,18 +479,26 @@ class Store:
             chain_id=row["chain_id"],
             chain_length=row["chain_length"],
             stale_hits=row["stale_hits"],
+            mood=row["mood"] if "mood" in row.keys() else "",
         )
 
     def save_thought_state(self, state: rhythm.ThoughtState) -> None:
         self.conn.execute(
             "INSERT INTO thought_state "
-            "(id, mode, chain_id, chain_length, stale_hits, updated_at) "
-            "VALUES (1, ?, ?, ?, ?, ?) "
+            "(id, mode, chain_id, chain_length, stale_hits, mood, updated_at) "
+            "VALUES (1, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT (id) DO UPDATE SET "
             "mode = excluded.mode, chain_id = excluded.chain_id, "
             "chain_length = excluded.chain_length, stale_hits = excluded.stale_hits, "
-            "updated_at = excluded.updated_at",
-            (state.mode, state.chain_id, state.chain_length, state.stale_hits, _now()),
+            "mood = excluded.mood, updated_at = excluded.updated_at",
+            (
+                state.mode,
+                state.chain_id,
+                state.chain_length,
+                state.stale_hits,
+                state.mood,
+                _now(),
+            ),
         )
         self.conn.commit()
 

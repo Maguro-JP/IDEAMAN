@@ -322,3 +322,31 @@ def test_threads_can_write_at_the_same_time(store):
 
     assert not errors, errors
     assert store.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()[0] >= 45
+
+
+def test_an_old_thought_state_gains_the_mood_column(tmp_path):
+    """気分の列が無い DB を開いても壊れないこと。"""
+    import sqlite3
+
+    from ideaman.store import Store
+
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        "CREATE TABLE thought_state ("
+        " id INTEGER PRIMARY KEY CHECK (id = 1), mode TEXT NOT NULL DEFAULT 'wander',"
+        " chain_id INTEGER, chain_length INTEGER NOT NULL DEFAULT 0,"
+        " stale_hits INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL);"
+        "INSERT INTO thought_state (id, mode, updated_at)"
+        " VALUES (1, 'associate', '2026-01-01T00:00:00+00:00');"
+    )
+    conn.commit()
+    conn.close()
+
+    store = Store(path)
+    try:
+        state = store.thought_state()
+        assert state.mode == "associate"
+        assert state.mood == ""
+    finally:
+        store.close()
