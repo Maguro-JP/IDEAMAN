@@ -92,6 +92,44 @@
   .score.up { color: var(--accent); }
   #archive.collapsed ol { display: none; }
   #empty { color: var(--line); font-size: .85rem; padding: 1rem .2rem; }
+
+  /* テーマ。ここが有益さの入口なので、書庫より手前に置く。 */
+  section#themes { width: 100%; max-width: 34rem; margin-top: 3rem; }
+  #themes h2 {
+    font-size: .75rem; font-weight: 400; letter-spacing: .4em; color: var(--dim);
+    border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin: 0 0 .5rem;
+    cursor: pointer;
+  }
+  #themes.collapsed .body { display: none; }
+  #theme-why { color: var(--dim); font-size: .8rem; line-height: 1.9; margin: .8rem 0; }
+  #theme-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+  #theme-list li {
+    padding: .7rem .2rem; border-bottom: 1px solid var(--line);
+    font-size: .85rem; line-height: 1.8;
+  }
+  #theme-list li.off { opacity: .4; }
+  .theme-name { display: flex; justify-content: space-between; gap: .8rem; align-items: baseline; }
+  .theme-mats { color: var(--dim); font-size: .78rem; }
+  .theme-toggle {
+    background: none; border: 1px solid var(--line); color: var(--dim);
+    font-family: inherit; font-size: .7rem; padding: .2rem .6rem;
+    border-radius: 6px; cursor: pointer; flex-shrink: 0;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  #theme-form input {
+    display: block; width: 100%; margin-bottom: .7rem;
+    background: transparent; border: none; border-bottom: 1px solid var(--line);
+    color: var(--fg); font-family: inherit; font-size: .85rem;
+    padding: .4rem .2rem; outline: none;
+  }
+  #theme-form input:focus { border-bottom-color: var(--accent); }
+  #theme-form input::placeholder { color: var(--line); }
+  #theme-form button {
+    background: none; border: 1px solid var(--line); color: var(--fg);
+    font-family: inherit; font-size: .8rem; letter-spacing: .2em;
+    padding: .5rem 1.4rem; border-radius: 999px; cursor: pointer;
+  }
+  #theme-form button:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -111,6 +149,23 @@
   </div>
 </main>
 
+<section id="themes" class="collapsed">
+  <h2 id="themes-toggle">いま取り組んでいること</h2>
+  <div class="body">
+    <p id="theme-why">
+      材料（あなた自身の言葉）を入れるほど、出てくる案が手元の課題に近づきます。
+      何も登録していないと、汎用の語をぶつけただけの警句になります。
+    </p>
+    <ul id="theme-list"></ul>
+    <form id="theme-form">
+      <input id="theme-name" placeholder="テーマ（例: IDEAMANを伸ばす）" maxlength="100" required>
+      <input id="theme-materials" placeholder="材料をカンマ区切りで（例: 通知,語彙,連鎖）">
+      <input id="theme-note" placeholder="補足（任意）" maxlength="500">
+      <button type="submit">登録する</button>
+    </form>
+  </div>
+</section>
+
 <section id="archive" class="collapsed">
   <h2 id="archive-toggle">これまでの考え</h2>
   <ol id="archive-list"></ol>
@@ -119,7 +174,8 @@
 <script>
 const el = (id) => document.getElementById(id);
 const ideaEl = el("idea"), summonEl = el("summon"), rateEl = el("rate"),
-      noteEl = el("note"), stockEl = el("stock"), archiveEl = el("archive");
+      noteEl = el("note"), stockEl = el("stock"), archiveEl = el("archive"),
+      themesEl = el("themes");
 let current = null;
 
 async function api(path, options) {
@@ -207,14 +263,75 @@ async function loadArchive() {
   } catch (e) { console.error(e); }
 }
 
+async function loadThemes() {
+  try {
+    const { themes } = await api("/api/themes");
+    const list = el("theme-list");
+    list.innerHTML = "";
+    for (const theme of themes) {
+      const li = document.createElement("li");
+      if (!theme.active) li.className = "off";
+
+      const head = document.createElement("div");
+      head.className = "theme-name";
+      const name = document.createElement("span");
+      name.textContent = theme.name;
+      const toggle = document.createElement("button");
+      toggle.className = "theme-toggle";
+      toggle.textContent = theme.active ? "休ませる" : "再開する";
+      toggle.addEventListener("click", async () => {
+        await api(`/api/themes/${theme.id}/active?active=${!theme.active}`,
+                  { method: "POST" });
+        loadThemes();
+      });
+      head.append(name, toggle);
+
+      const mats = document.createElement("div");
+      mats.className = "theme-mats";
+      mats.textContent = theme.materials.length
+        ? theme.materials.join("、")
+        : "材料がまだありません";
+
+      li.append(head, mats);
+      list.appendChild(li);
+    }
+  } catch (e) { console.error(e); }
+}
+
+el("theme-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const name = el("theme-name").value.trim();
+  if (!name) return;
+  const materials = el("theme-materials").value
+    .split(",").map(s => s.trim()).filter(Boolean);
+  try {
+    await api("/api/themes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        note: el("theme-note").value.trim() || null,
+        materials,
+      }),
+    });
+    el("theme-name").value = "";
+    el("theme-materials").value = "";
+    el("theme-note").value = "";
+    loadThemes();
+  } catch (e) { console.error(e); }
+});
+
 summonEl.addEventListener("click", summon);
 document.querySelectorAll(".vote").forEach(b =>
   b.addEventListener("click", () => vote(b)));
 el("archive-toggle").addEventListener("click", () =>
   archiveEl.classList.toggle("collapsed"));
+el("themes-toggle").addEventListener("click", () =>
+  themesEl.classList.toggle("collapsed"));
 
 refreshStock();
 loadArchive();
+loadThemes();
 </script>
 </body>
 </html>

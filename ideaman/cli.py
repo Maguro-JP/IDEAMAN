@@ -30,7 +30,9 @@ def _configure_logging(verbose: bool) -> None:
 def cmd_idea(args: argparse.Namespace, store: Store) -> int:
     idea = service.receive_idea(store, domain=args.domain, use_llm=not args.no_llm)
     print(f"\n  {idea.text}\n")
-    print(f"  #{idea.id}  {idea.mode or '-'}  在庫 {store.stock_count()}")
+    theme = store.theme(idea.theme_id) if idea.theme_id else None
+    label = theme.name if theme else "テーマなし"
+    print(f"  #{idea.id}  {label}  在庫 {store.stock_count()}")
     return 0
 
 
@@ -53,6 +55,47 @@ def cmd_worker(args: argparse.Namespace, store: Store) -> int:
         worker.run()
     except KeyboardInterrupt:
         print("\n止めました")
+    return 0
+
+
+def cmd_theme(args: argparse.Namespace, store: Store) -> int:
+    """テーマの登録と一覧。
+
+    テーマが無いと、システムは何について考えればいいか分からず、
+    汎用の語を衝突させた警句しか作れない。ここが有益さの入口。
+    """
+    if args.name is None:
+        themes = store.themes(active_only=False)
+        if not themes:
+            print("テーマがまだありません。\n")
+            print('  ideaman theme "IDEAMANを伸ばす" --add 通知,語彙,連鎖')
+            print("\n材料（あなた自身の語）を入れるほど、出てくる案が具体的になります。")
+            return 0
+        for theme in themes:
+            mark = " " if theme.active else "×"
+            materials = store.materials(theme.id)
+            print(f"{mark} [{theme.id}] {theme.name}")
+            if theme.note:
+                print(f"      {theme.note}")
+            print(f"      材料 {len(materials)}: {'、'.join(materials) or '（まだ無い）'}")
+        return 0
+
+    theme = store.add_theme(args.name, args.note)
+    if args.add:
+        added = store.add_materials(theme.id, args.add.split(","))
+        print(f"材料を {added} 件足しました")
+    if args.off:
+        store.set_theme_active(theme.id, False)
+        print("このテーマについては考えないようにしました")
+    elif args.on:
+        store.set_theme_active(theme.id, True)
+
+    materials = store.materials(theme.id)
+    print(f"[{theme.id}] {theme.name}")
+    print(f"材料 {len(materials)}: {'、'.join(materials) or '（まだ無い）'}")
+    if not materials:
+        print("\n材料がまだありません。あなた自身の語を入れると案が具体的になります:")
+        print(f'  ideaman theme "{theme.name}" --add 通知,語彙,連鎖')
     return 0
 
 
@@ -101,6 +144,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--console", action="store_true", help="配信をターミナルにも出す"
     )
     p_worker.set_defaults(func=cmd_worker)
+
+    p_theme = sub.add_parser(
+        "theme", help="いま取り組んでいることを登録する（有益さの入口）", parents=[common]
+    )
+    p_theme.add_argument("name", nargs="?", help="テーマ名。省略すると一覧")
+    p_theme.add_argument("--add", help="材料をカンマ区切りで足す（例: 通知,語彙,連鎖）")
+    p_theme.add_argument("--note", help="補足")
+    p_theme.add_argument("--off", action="store_true", help="このテーマを一旦休む")
+    p_theme.add_argument("--on", action="store_true", help="再開する")
+    p_theme.set_defaults(func=cmd_theme)
 
     p_div = sub.add_parser("diversity", help="リズムの健康度を見る", parents=[common])
     p_div.add_argument("--limit", type=int, default=500)

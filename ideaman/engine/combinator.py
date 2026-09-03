@@ -24,6 +24,10 @@ SLOT_TO_POOL = {
     "operation": "operations",
     "constraint": "constraints",
     "provocation": "provocations",
+    "aspect": "aspects",
+    "probe": "probes",
+    # material はプールから引かない。呼び出し側が渡すテーマの材料を使う。
+    "material": "materials",
 }
 
 
@@ -148,6 +152,7 @@ def combine(
     seed: int | None = None,
     inherit: Sequence[tuple[str, str]] = (),
     inherit_count: int = 0,
+    materials: Sequence[str] = (),
 ) -> IdeaSeed:
     """語彙を衝突させて `IdeaSeed` を1つ作る。
 
@@ -160,6 +165,10 @@ def combine(
         seed: 乱数シード。指定すると結果が決定的になる。
         inherit: 直前のアイデアが使った (プール名, 語)。連想モードで持ち越す候補。
         inherit_count: このうち何語を引き継ぐか。0 なら引き継がない（放浪）。
+        materials: いま取り組んでいるテーマの材料（例: 通知, 会議）。
+            **これが有益さの源**。汎用の概念だけを衝突させても宙に浮いた
+            警句にしかならないので、片方をユーザー自身の語にする。
+            空のときは material を使わないテンプレートに限定される。
 
     Returns:
         文章化前の構造化された種。
@@ -173,6 +182,17 @@ def combine(
     candidates = lexicon.templates_for(tone)
     if not candidates:
         candidates = lexicon.templates
+    if materials:
+        # 材料があるなら、それを使うテンプレートを優先する。汎用の概念だけの
+        # フォールバックは、テーマが無いときのためのもの。
+        grounded = [t for t in candidates if "material" in t.needs]
+        candidates = grounded or candidates
+    else:
+        # 材料が無いなら material を使うテンプレートは埋められない。
+        usable = [t for t in candidates if "material" not in t.needs]
+        candidates = usable or [
+            t for t in lexicon.templates if "material" not in t.needs
+        ]
     template: Template = rng.choice(candidates)
 
     usable_pools = {
@@ -221,6 +241,15 @@ def combine(
             term = kept or _weighted_choice(rng, pool, weights).term
             slots[concept_slots[0]] = term
             used.append(("concepts", term))
+
+    if "material" in template.needs:
+        # 材料はプールではなくテーマから来る。連想では引き継ぎを優先する。
+        kept = take_carried("materials")
+        chosen = kept or _weighted_choice(
+            rng, tuple(Term(term=m) for m in materials), weights
+        ).term
+        slots["material"] = chosen
+        used.append(("materials", chosen))
 
     for slot in template.needs:
         if slot in slots:

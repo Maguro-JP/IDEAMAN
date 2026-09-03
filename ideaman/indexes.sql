@@ -9,3 +9,5 @@ CREATE INDEX IF NOT EXISTS idx_ideas_chain ON ideas (chain_id);
 CREATE INDEX IF NOT EXISTS idx_ratings_idea ON ratings (idea_id);
 CREATE INDEX IF NOT EXISTS idx_deliveries_pending ON deliveries (channel, state, id);
 CREATE INDEX IF NOT EXISTS idx_deliveries_external ON deliveries (channel, external_id);
+CREATE INDEX IF NOT EXISTS idx_theme_terms ON theme_terms (theme_id);
+CREATE INDEX IF NOT EXISTS idx_ideas_theme ON ideas (theme_id);

@@ -34,6 +34,19 @@ MAX_REDRAWS = 6
 MAX_THINKING_STEPS = 20
 
 
+def _pick_theme(store: Store, parent: Idea | None) -> int | None:
+    """このアイデアは何についてのものか。
+
+    連鎖の途中なら親と同じテーマを続ける（一つの思考の流れは一つの話題に
+    ついてのもの）。新しく始めるときは、有効なテーマから一つ選ぶ。
+    テーマが一つも無ければ None（汎用のアイデアになる）。
+    """
+    if parent is not None and parent.theme_id is not None:
+        return parent.theme_id
+    themes = store.themes(active_only=True)
+    return random.choice(themes).id if themes else None
+
+
 def _draw(
     store: Store,
     *,
@@ -41,7 +54,7 @@ def _draw(
     domain: str | None,
     tone: str | None,
     seed: int | None,
-) -> tuple[IdeaSeed, rhythm.Step, Idea | None, int]:
+) -> tuple[IdeaSeed, rhythm.Step, Idea | None, int, int | None]:
     """リズムに従って種を引く。重複したら引き直す。
 
     Returns:
@@ -64,6 +77,9 @@ def _draw(
         # 連想したかったが親が見つからない（初回など）。素直に放浪する。
         step = rhythm.Step(mode=rhythm.WANDER, inherit=0, state=step.state)
 
+    theme_id = _pick_theme(store, parent)
+    materials = store.materials(theme_id) if theme_id is not None else []
+
     duplicates = 0
     idea_seed = None
     for attempt in range(MAX_REDRAWS + 1):
@@ -75,6 +91,7 @@ def _draw(
             seed=seed if attempt == 0 else None,
             inherit=inherit,
             inherit_count=step.inherit,
+            materials=materials,
         )
         if not store.signature_exists(idea_seed.signature):
             break
@@ -84,7 +101,7 @@ def _draw(
         duplicates += 1
 
     assert idea_seed is not None
-    return idea_seed, step, parent, duplicates
+    return idea_seed, step, parent, duplicates, theme_id
 
 
 def generate_idea(
@@ -105,7 +122,7 @@ def generate_idea(
     休眠させて放浪に戻る。
     """
     lexicon = lexicon or default_lexicon()
-    idea_seed, step, parent, duplicates = _draw(
+    idea_seed, step, parent, duplicates, theme_id = _draw(
         store, lexicon=lexicon, domain=domain, tone=tone, seed=seed
     )
 
@@ -125,6 +142,7 @@ def generate_idea(
         parent_id=parent.id if step.mode == rhythm.ASSOCIATE and parent else None,
         chain_id=chain_id,
         mode=step.mode,
+        theme_id=theme_id,
     )
 
     weights = store.weights()

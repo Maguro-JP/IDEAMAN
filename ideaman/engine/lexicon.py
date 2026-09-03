@@ -15,7 +15,15 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 #: 抽選対象になる語彙プールの名前。テンプレの needs で使う名前とは
 #: concept_a / concept_b -> concepts の対応で結びつく。
-POOL_NAMES = ("concepts", "operations", "constraints", "provocations")
+POOL_NAMES = (
+    "concepts",
+    "operations",
+    "constraints",
+    "provocations",
+    # 具体性を担う2つ。どの側面をいじるか、まず何で試すか。
+    "aspects",
+    "probes",
+)
 
 
 @dataclass(frozen=True)

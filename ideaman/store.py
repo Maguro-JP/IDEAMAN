@@ -44,6 +44,19 @@ MAX_WEIGHT = 5.0
 
 
 @dataclass(frozen=True)
+class Theme:
+    """いま取り組んでいること。"""
+
+    id: int
+    name: str
+    note: str | None
+    active: bool
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "name": self.name, "note": self.note, "active": self.active}
+
+
+@dataclass(frozen=True)
 class Idea:
     """保存されたアイデア。"""
 
@@ -61,6 +74,7 @@ class Idea:
     mode: str | None = None
     verdict: str | None = None
     pick_score: float = 0.0
+    theme_id: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -77,11 +91,18 @@ class Idea:
             "parent_id": self.parent_id,
             "mode": self.mode,
             "verdict": self.verdict,
+            "theme_id": self.theme_id,
         }
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _row_to_theme(row: sqlite3.Row) -> Theme:
+    return Theme(
+        id=row["id"], name=row["name"], note=row["note"], active=bool(row["active"])
+    )
 
 
 def _row_to_idea(row: sqlite3.Row) -> Idea:
@@ -100,6 +121,7 @@ def _row_to_idea(row: sqlite3.Row) -> Idea:
         parent_id=row["parent_id"] if "parent_id" in keys else None,
         mode=row["mode"] if "mode" in keys else None,
         verdict=row["verdict"] if "verdict" in keys else None,
+        theme_id=row["theme_id"] if "theme_id" in keys else None,
         pick_score=(
             row["pick_score"]
             if "pick_score" in keys and row["pick_score"] is not None
@@ -148,6 +170,7 @@ class Store:
                 # 既存行の検証で落ちることがあるうえ、後から外せない。
                 ("verdict", "TEXT"),
                 ("pick_score", "REAL NOT NULL DEFAULT 0.0"),
+                ("theme_id", "INTEGER"),
             ],
             "weights": [
                 ("dormant_until", "TEXT"),
@@ -209,6 +232,69 @@ class Store:
         """語の重みをまとめて動かす。重複を信号として拾うときに使う。"""
         for pool, term in terms:
             self._bump(pool, term, factor)
+        self.conn.commit()
+
+    # --- テーマ -------------------------------------------------------
+    #
+    # テーマが無いと、システムは「何について考えればいいか」を知らない。
+    # 汎用の語だけを衝突させても宙に浮いた警句にしかならないので、
+    # 有益なアイデアの前提がここ。
+
+    def add_theme(self, name: str, note: str | None = None) -> Theme:
+        """テーマを登録する。同名があればそれを返す。"""
+        self.conn.execute(
+            "INSERT INTO themes (name, note, created_at) VALUES (?, ?, ?) "
+            "ON CONFLICT (name) DO UPDATE SET note = COALESCE(excluded.note, note)",
+            (name, note, _now()),
+        )
+        self.conn.commit()
+        return self.theme_by_name(name)  # type: ignore[return-value]
+
+    def add_materials(self, theme_id: int, terms: Iterable[str]) -> int:
+        """テーマの材料を足す。すでにあるものは無視する。"""
+        added = 0
+        for term in terms:
+            term = term.strip()
+            if not term:
+                continue
+            cur = self.conn.execute(
+                "INSERT OR IGNORE INTO theme_terms (theme_id, term) VALUES (?, ?)",
+                (theme_id, term),
+            )
+            added += cur.rowcount or 0
+        self.conn.commit()
+        return added
+
+    def materials(self, theme_id: int) -> list[str]:
+        rows = self.conn.execute(
+            "SELECT term FROM theme_terms WHERE theme_id = ? ORDER BY id", (theme_id,)
+        ).fetchall()
+        return [row["term"] for row in rows]
+
+    def themes(self, active_only: bool = True) -> list[Theme]:
+        sql = "SELECT * FROM themes"
+        if active_only:
+            sql += " WHERE active = 1"
+        sql += " ORDER BY id"
+        return [_row_to_theme(r) for r in self.conn.execute(sql).fetchall()]
+
+    def theme_by_name(self, name: str) -> Theme | None:
+        row = self.conn.execute(
+            "SELECT * FROM themes WHERE name = ?", (name,)
+        ).fetchone()
+        return _row_to_theme(row) if row else None
+
+    def theme(self, theme_id: int) -> Theme | None:
+        row = self.conn.execute(
+            "SELECT * FROM themes WHERE id = ?", (theme_id,)
+        ).fetchone()
+        return _row_to_theme(row) if row else None
+
+    def set_theme_active(self, theme_id: int, active: bool) -> None:
+        """一時的に考えるのをやめる／再開する。テーマは消さない。"""
+        self.conn.execute(
+            "UPDATE themes SET active = ? WHERE id = ?", (1 if active else 0, theme_id)
+        )
         self.conn.commit()
 
     # --- カウンタ -----------------------------------------------------
@@ -317,6 +403,7 @@ class Store:
         parent_id: int | None = None,
         chain_id: int | None = None,
         mode: str | None = None,
+        theme_id: int | None = None,
     ) -> Idea:
         """生成されたアイデアを `unseen` として蓄える。
 
@@ -326,8 +413,8 @@ class Store:
         cursor = self.conn.execute(
             "INSERT INTO ideas "
             "(text, seed_json, domain, template_id, tone, mood, source, state,"
-            " parent_id, created_at, signature, chain_id, mode) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 'unseen', ?, ?, ?, ?, ?)",
+            " parent_id, created_at, signature, chain_id, mode, theme_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'unseen', ?, ?, ?, ?, ?, ?)",
             (
                 text,
                 json.dumps(
@@ -350,6 +437,7 @@ class Store:
                 seed.signature,
                 chain_id,
                 mode,
+                theme_id,
             ),
         )
         idea_id = cursor.lastrowid

@@ -112,7 +112,7 @@ constraints:
   - {term: 予算ゼロで, domains: [economy]}
   - {term: 紙の上だけで, domains: [analog, physical]}
   - {term: 文字を使わずに, domains: [language]}
-  - {term: 一日一回しか, domains: [time, rule]}
+  - {term: 一日一回だけ, domains: [time, rule]}
   - {term: 見知らぬ人と, domains: [social, trust]}
   - {term: 説明書なしで, domains: [ux, learning]}
   - {term: 夜のあいだだけ, domains: [time]}
@@ -147,3 +147,43 @@ moods:
   - 実務
   - 夢想
   - 逆説
+
+# --- 以下は「有益さ」のための部品 -------------------------------------
+#
+# 衝突だけでは警句にしかならない。実際に手が動くには「何の側面を」
+# 「まず何で試すか」が要る。この2つが具体性を担う。
+
+# 対象のどの側面をいじるか。漠然と「Xを変える」ではなく側面を名指しする。
+aspects:
+  - {term: 順番, domains: [structure]}
+  - {term: 頻度, domains: [time]}
+  - {term: 入り口, domains: [ux]}
+  - {term: 終わり方, domains: [ux]}
+  - {term: 待ち時間, domains: [time, ux]}
+  - {term: 初期状態, domains: [structure]}
+  - {term: 失敗したときの挙動, domains: [rule]}
+  - {term: 誰が決めるか, domains: [social, rule]}
+  - {term: 名前, domains: [language]}
+  - {term: 単位, domains: [structure]}
+  - {term: 見た目, domains: [art, ux]}
+  - {term: 手数, domains: [ux]}
+  - {term: 記録の残り方, domains: [memory, information]}
+  - {term: 例外の扱い, domains: [rule]}
+  - {term: 境界, domains: [structure, space]}
+  - {term: 一番よく使う部分, domains: [ux]}
+  - {term: 誰も見ていない部分, domains: [structure]}
+  - {term: 一番お金がかかっている部分, domains: [economy]}
+
+# まず何で試すか。30分〜1日で終わる大きさに寄せる。
+# アイデアが「良さそうだが動けない」で終わるのを防ぐための欄。
+probes:
+  - {term: 紙に1枚だけ書いてみる, domains: [analog]}
+  - {term: 既存のものを1つ選んで作り替える, domains: [creation]}
+  - {term: 1日だけその運用にしてみる, domains: [time]}
+  - {term: 一番小さい例で手を動かす, domains: [creation]}
+  - {term: 誰か1人に見せて反応を見る, domains: [social]}
+  - {term: 逆の状態を作って比べる, domains: [structure]}
+  - {term: 5件だけ手で作ってみる, domains: [creation]}
+  - {term: 今あるログを見返す, domains: [information]}
+  - {term: 15分だけ試して捨てる, domains: [time]}
+  - {term: 一番困っている場面を1つ書き出す, domains: [mind]}

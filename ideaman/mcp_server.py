@@ -215,6 +215,78 @@ def build_server(store: Store):
         return json.dumps(_as_dict(idea), ensure_ascii=False, indent=2)
 
     @mcp.tool(
+        name="ideaman_register_theme",
+        annotations=ToolAnnotations(
+            title="いま取り組んでいることを登録する",
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+    )
+    def register_theme(
+        name: str, materials: list[str] | None = None, note: str | None = None
+    ) -> str:
+        """IDEAMAN に「いま何について考えてほしいか」を教える。
+
+        **これが有益さの入口。** テーマと材料が無いと、IDEAMAN は汎用の語を
+        ぶつけただけの警句しか作れない。材料（ユーザー自身の言葉）が入ると、
+        衝突の相手側がユーザーの手元の課題になり、案が着地する。
+
+        会話の中でユーザーが取り組んでいる対象（プロジェクト、仕組み、
+        制作物）が分かったら、その構成要素を材料として登録するとよい。
+        同名のテーマがあれば材料が足される（重複は無視される）。
+
+        Args:
+            name: テーマ名（例: "IDEAMANを伸ばす", "店の予約フローを直す"）。
+            materials: ユーザー自身の語。**普通名詞の部品名がよい**
+                （例: ["通知", "語彙", "連鎖", "評価"]）。文章ではなく単語。
+            note: 補足。
+
+        Returns:
+            JSON 文字列。`{"id": int, "name": str, "materials": [...]}`。
+        """
+        theme = store.add_theme(name, note)
+        store.add_materials(theme.id, materials or ())
+        return json.dumps(
+            {**theme.to_dict(), "materials": store.materials(theme.id)},
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    @mcp.tool(
+        name="ideaman_list_themes",
+        annotations=ToolAnnotations(
+            title="登録されているテーマを見る",
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+    )
+    def list_themes() -> str:
+        """IDEAMAN がいま何について考えているかを見る。
+
+        アイデアを受け取る前に、狙いどおりの題材が登録されているかを
+        確かめるために使う。`materials` が空のテーマは、案を具体的に
+        できないので、`ideaman_register_theme` で材料を足すとよい。
+
+        Returns:
+            JSON 文字列。`{"themes": [{"id", "name", "note", "active",
+            "materials"}]}`。`active` が false のテーマは休んでいる。
+        """
+        return json.dumps(
+            {
+                "themes": [
+                    {**t.to_dict(), "materials": store.materials(t.id)}
+                    for t in store.themes(active_only=False)
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    @mcp.tool(
         name="ideaman_stock_status",
         annotations=ToolAnnotations(
             title="在庫といま考えていること",
@@ -235,7 +307,9 @@ def build_server(store: Store):
             `stock` 未閲覧の在庫数、`mode` いまの思考モード
             (`associate` = 連想中 / `wander` = 放浪中)、
             `chain_length` 現在の連鎖の長さ、`dormant_terms` いま休眠中の語数
-            （しばらく考えないようにしている題材）、`total` 総生成数。
+            （しばらく考えないようにしている題材）、`total` 総生成数、
+            `themes` 登録済みテーマ数。**これが 0 なら案は汎用の警句にしか
+            ならないので、`ideaman_register_theme` を勧めること。**
         """
         state = store.thought_state()
         health = measure(store, limit=200)
@@ -246,6 +320,7 @@ def build_server(store: Store):
                 "chain_length": state.chain_length,
                 "dormant_terms": health.dormant_now,
                 "total": health.total,
+                "themes": len(store.themes(active_only=True)),
             },
             ensure_ascii=False,
             indent=2,

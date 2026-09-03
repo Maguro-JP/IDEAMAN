@@ -45,6 +45,18 @@ class RateRequest(BaseModel):
     note: str | None = Field(None, max_length=500)
 
 
+class ThemeRequest(BaseModel):
+    """いま取り組んでいることと、その材料。
+
+    材料（あなた自身の語）が入って初めて、衝突が宙に浮いた警句ではなく
+    手元の課題の上に着地する。ここが有益さの入口。
+    """
+
+    name: str = Field(..., min_length=1, max_length=100)
+    note: str | None = Field(None, max_length=500)
+    materials: list[str] = Field(default_factory=list)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """起動時に保管庫を開き、在庫を用意しておく。"""
@@ -128,6 +140,40 @@ def list_ideas(
 def stock(store: Store = Depends(get_store)) -> dict:
     """在庫件数。UI の「◯個の考えが溜まっている」表示に使う。"""
     return {"count": store.stock_count()}
+
+
+@app.get("/api/themes")
+def list_themes(store: Store = Depends(get_store)) -> dict:
+    """登録済みのテーマと、その材料。"""
+    return {
+        "themes": [
+            {**theme.to_dict(), "materials": store.materials(theme.id)}
+            for theme in store.themes(active_only=False)
+        ]
+    }
+
+
+@app.post("/api/themes")
+def create_theme(body: ThemeRequest, store: Store = Depends(get_store)) -> dict:
+    """テーマを登録し、材料を足す。同名なら既存のものに足す。"""
+    theme = store.add_theme(body.name, body.note)
+    store.add_materials(theme.id, body.materials)
+    return {**theme.to_dict(), "materials": store.materials(theme.id)}
+
+
+@app.post("/api/themes/{theme_id}/active")
+def set_theme_active(
+    theme_id: int,
+    active: bool = Query(True),
+    store: Store = Depends(get_store),
+) -> dict:
+    """そのテーマについて考えるかどうか。消さずに休ませる。"""
+    if store.theme(theme_id) is None:
+        raise HTTPException(status_code=404, detail=f"テーマ {theme_id} は存在しません")
+    store.set_theme_active(theme_id, active)
+    theme = store.theme(theme_id)
+    assert theme is not None
+    return {**theme.to_dict(), "materials": store.materials(theme.id)}
 
 
 @app.get("/api/domains")

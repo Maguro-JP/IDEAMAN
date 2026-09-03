@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS ideas (
     --   kept     選ばれなかった。捨てない。連鎖を辿れば読める
     verdict     TEXT CHECK (verdict IS NULL OR verdict IN ('chosen', 'kept')),
     -- 選別のときに付いたスコア。取り出す順序に使い、あとで選び方を検証できる
-    pick_score  REAL NOT NULL DEFAULT 0.0
+    pick_score  REAL NOT NULL DEFAULT 0.0,
+    -- どのテーマについて考えたか。NULL はテーマ未登録時の汎用アイデア
+    theme_id    INTEGER REFERENCES themes (id)
 );
 
 
@@ -87,3 +89,23 @@ CREATE TABLE IF NOT EXISTS deliveries (
     sent_at     TEXT
 );
 
+
+-- テーマ = いま取り組んでいること。
+-- これが無いと、システムは「何について考えればいいか」を知らないまま
+-- 汎用の語を衝突させるしかなく、詩は作れても有益なアイデアは作れない。
+CREATE TABLE IF NOT EXISTS themes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL UNIQUE,
+    note        TEXT,
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT    NOT NULL
+);
+
+-- テーマの材料。ユーザー自身の語彙（例: 通知, 語彙, 連鎖, 評価）。
+-- 汎用の概念と衝突させる「あなた側」の項がこれ。
+CREATE TABLE IF NOT EXISTS theme_terms (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    theme_id INTEGER NOT NULL REFERENCES themes (id) ON DELETE CASCADE,
+    term     TEXT    NOT NULL,
+    UNIQUE (theme_id, term)
+);

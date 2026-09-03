@@ -1,68 +1,88 @@
 # アイデアの文型。
 #
 # 使えるプレースホルダ:
-#   {concept_a} {concept_b} {operation} {constraint} {provocation}
+#   {material}    あなたが登録したテーマの材料（例: 通知, 語彙, 会議）
+#   {concept_a} {concept_b}  汎用の概念（遠くから持ってくる）
+#   {operation} {constraint} {provocation} {aspect} {probe}
 #
 # tone:
-#   oracle   … 天啓・お告げ寄り。断定的で、説明しない。
-#   proposal … 提案寄り。手を動かせる具体性がある。
-#   question … 問いだけを置く。答えは書かない。
+#   proposal … 明日試せる具体策。「何をするか」と「まず何から」が要る
+#   question … 見方を変える問い。答えを書かず、前提を疑わせる
 #
-# 各テンプレは needs で必要なプレースホルダを宣言する。combinator は
-# needs に含まれる語だけを抽選するので、テンプレを足すときは needs も更新すること。
+# 設計方針:
+# **警句を書かない。** 「Xは、Yのかたちをしている」のような一行は、
+# 読んで感心して終わる。有益なアイデアには、いじる側面と最初の一歩が要る。
+# material が入るテンプレートを既定にし、材料の無いテーマでは concept に
+# フォールバックする。
+#
+# 各テンプレは needs で必要なプレースホルダを宣言する。
 
 templates:
-  - id: oracle_collision
-    tone: oracle
-    needs: [concept_a, concept_b]
-    text: "{concept_a}は、{concept_b}のかたちをしている。"
-
-  - id: oracle_operation
-    tone: oracle
-    needs: [concept_a, operation]
-    text: "{concept_a}を{operation}。それだけでいい。"
-
-  - id: oracle_constraint
-    tone: oracle
-    needs: [concept_a, constraint]
-    text: "{constraint}{concept_a}に触れたとき、何かが変わる。"
-
-  - id: oracle_pair_rule
-    tone: oracle
-    needs: [concept_a, concept_b, operation]
-    text: "{concept_a}と{concept_b}のあいだにあるものを{operation}。"
-
-  - id: proposal_basic
+  # --- 具体策 -------------------------------------------------------
+  - id: swap_aspect
     tone: proposal
-    needs: [concept_a, operation, constraint]
-    text: "{concept_a}を{constraint}{operation}——そういうものを作ってみる。"
+    needs: [material, aspect, operation, probe]
+    text: "{material}の{aspect}を{operation}。まず{probe}。"
 
-  - id: proposal_mashup
+  - id: borrow_from
     tone: proposal
-    needs: [concept_a, concept_b, constraint]
-    text: "{concept_a}の仕組みを{concept_b}に持ち込む。ただし{constraint}。"
+    needs: [material, concept_a, aspect, probe]
+    text: "{concept_a}のやり方を{material}に持ち込む。特に{aspect}のところ。まず{probe}。"
 
-  - id: proposal_invert
+  - id: constrained_rebuild
     tone: proposal
-    needs: [concept_a, operation]
-    text: "誰もが当然だと思っている{concept_a}の部分を{operation}としたら、何が残るだろう。"
+    needs: [material, constraint, aspect, probe]
+    text: "{constraint}{material}を作り直すとしたら、{aspect}はどうなるか。まず{probe}。"
 
-  - id: proposal_service
+  - id: remove_and_see
     tone: proposal
-    needs: [concept_a, concept_b, operation]
-    text: "{concept_a}のための{concept_b}。核になるのは「{operation}」という一点だけ。"
+    needs: [material, aspect, probe]
+    text: "{material}から{aspect}を丸ごと取り除いてみる。困る人がいるなら、そこが本体。まず{probe}。"
 
-  - id: question_plain
+  - id: exaggerate
+    tone: proposal
+    needs: [material, aspect, operation, probe]
+    text: "{material}の{aspect}だけを極端にする——{operation}くらいまで。壊れ方で設計が見える。まず{probe}。"
+
+  - id: two_materials
+    tone: proposal
+    needs: [material, concept_a, operation, probe]
+    text: "{material}と{concept_a}を同じ仕組みで扱えないか。鍵は「{operation}」こと。まず{probe}。"
+
+  - id: for_one_person
+    tone: proposal
+    needs: [material, aspect, probe]
+    text: "{material}を、いちばんヘビーに使う一人のためだけに作り直す。まず変わるのは{aspect}のはず。まず{probe}。"
+
+  # --- 問い ---------------------------------------------------------
+  - id: question_aspect
     tone: question
-    needs: [concept_a, provocation]
-    text: "{concept_a}について——{provocation}。"
+    needs: [material, aspect, provocation]
+    text: "{material}の{aspect}について——{provocation}。"
 
-  - id: question_pair
+  - id: question_assumption
     tone: question
-    needs: [concept_a, concept_b, provocation]
-    text: "{concept_a}と{concept_b}を並べて置いてみる。{provocation}。"
+    needs: [material, aspect]
+    text: "{material}の{aspect}は、なぜ今の形なのか。決めた理由をもう誰も覚えていないなら、変えていい。"
+
+  - id: question_absence
+    tone: question
+    needs: [material, concept_a]
+    text: "{concept_a}にあって{material}に無いものは何か。無いのは不要だからか、思いつかなかっただけか。"
 
   - id: question_constrained
     tone: question
-    needs: [concept_a, constraint, provocation]
-    text: "{constraint}{concept_a}を扱うとする。{provocation}。"
+    needs: [material, constraint, provocation]
+    text: "{constraint}{material}を扱うとする。{provocation}。"
+
+  # --- 材料が無いとき（テーマ未登録）のフォールバック -----------------
+  # 汎用の概念だけで作る。テーマがある場合よりどうしても浅くなる。
+  - id: bare_collision
+    tone: proposal
+    needs: [concept_a, concept_b, operation, probe]
+    text: "{concept_a}のやり方を{concept_b}に持ち込む。鍵は「{operation}」こと。まず{probe}。"
+
+  - id: bare_question
+    tone: question
+    needs: [concept_a, aspect, provocation]
+    text: "{concept_a}の{aspect}について——{provocation}。"
