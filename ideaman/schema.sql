@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS weights (
     slept_at_chain INTEGER,
     -- その語が何回の評価を通ったか。多く出た語ほど1回の重みを小さくする。
     rated_count   INTEGER NOT NULL DEFAULT 0,
+    score_sum     REAL NOT NULL DEFAULT 0.0,
     PRIMARY KEY (pool, term)
 );
 

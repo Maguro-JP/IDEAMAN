@@ -418,26 +418,39 @@ def test_learned_phrasing_weights_are_reset_on_open(tmp_path):
         reopened.close()
 
 
-def test_rating_the_same_term_over_and_over_has_diminishing_effect(store):
-    """同じ語を評価し続けても、際限なく太らないこと。
+def test_rating_the_same_term_over_and_over_does_not_run_away(store):
+    """同じ語を評価し続けても、露出だけで太らないこと。
 
-    多く出た語ほど多く評価される。掛け算で積み上げると、たまたま多く
-    出た語が太り、太るからまた出る。**内容に関係なく7割 👍 を押す人**の
-    30日模擬で、当たり率が 11% まで落ちた——評価しない場合の 15% より
-    悪い。評価が出力を悪くしていた。
+    掛け算で積み上げると、多く出た語ほど多く評価されて太り、太るから
+    また出る。内容に関係なく 👍 を押す人のもとで、たまたま出た材料が
+    上限 5.0 近く（実測 4.71）まで走っていた。平均で持てば露出では
+    増えない。
     """
     idea_seed, idea = _save(store)
     term = _idea_terms(idea_seed)[0][1]
 
-    store.rate(idea.id, 1)
-    first_step = store.weights()[term] - 1.0
-
-    for _ in range(30):
+    for _ in range(60):
         store.rate(idea.id, 1)
-    before = store.weights()[term]
-    store.rate(idea.id, 1)
-    later_step = store.weights()[term] - before
+    all_up = store.weights()[term]
 
-    assert later_step < first_step / 2, (first_step, later_step)
-    # それでも「好まれている」向きは保つ
-    assert store.weights()[term] > 1.0
+    # 同じ数だけ 👎 も混ぜれば、平均は 0 に近づく
+    for _ in range(60):
+        store.rate(idea.id, -1)
+    mixed = store.weights()[term]
+
+    assert all_up > mixed > MIN_WEIGHT
+    assert abs(mixed - 1.0) < abs(all_up - 1.0)
+
+
+def test_a_liked_term_still_outweighs_a_disliked_one(store):
+    """好みの向きは、ちゃんと重みに出ること。"""
+    liked_seed, liked = _save(store, seed=11)
+    disliked_seed, disliked = _save(store, seed=12)
+    for _ in range(5):
+        store.rate(liked.id, 1)
+        store.rate(disliked.id, -1)
+
+    weights = store.weights()
+    up = weights[_idea_terms(liked_seed)[0][1]]
+    down = weights[_idea_terms(disliked_seed)[0][1]]
+    assert up > 1.0 > down
