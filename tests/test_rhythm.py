@@ -353,3 +353,53 @@ def test_terms_slept_before_the_column_existed_are_not_held_back():
     slept = datetime(2026, 1, 1, tzinfo=UTC)
     until = rhythm.dormancy_for(0, now=slept)
     assert rhythm.is_awake(until, 0, None, now=slept + timedelta(minutes=1))
+
+
+def test_what_total_dormancy_costs(tmp_path):
+    """全部眠るとどうなるかを、数字で残しておく。
+
+    「材料が眠る」の何が悪いのかを最初は取り違えていた。材料そのものは
+    出力に入り続ける（スロットは必ず埋まる）。壊れるのは**抽選**のほう:
+
+    - 好みが控えめなら、重みが全部 0 になって一様抽選に落ちる。
+      評価で育てたものが丸ごと効かなくなる
+    - 好みが強い語が1つあると、aspiration でそれだけが生き残り、
+      **その語が100%引かれる**。避けたかった「同じ文が並ぶ」状態
+
+    どちらもエラーにならない。だから数字で置いておく。
+    """
+    import collections
+    import random
+
+    from ideaman.engine.combinator import Term, _weighted_choice
+    from ideaman.store import Store
+
+    store = Store(tmp_path / "cost.db")
+    try:
+        theme = store.add_theme("t")
+        materials = ["通知", "語彙", "連鎖", "在庫", "休眠", "評価"]
+        store.add_materials(theme.id, materials)
+        for _ in range(12):
+            store._bump("materials", "通知", 1.15)
+        store.conn.commit()
+
+        terms = tuple(Term(term=m, domains=()) for m in materials)
+
+        def favourite_share() -> float:
+            weights = store.draw_weights()
+            rng = random.Random(0)
+            drawn = collections.Counter(
+                _weighted_choice(rng, terms, weights).term for _ in range(2000)
+            )
+            return drawn["通知"] / 2000
+
+        awake = favourite_share()
+        assert 0.2 < awake < 0.8, awake
+
+        # 連鎖の記録を消して「時間でしか明けない」状態を作る（修正前の姿）。
+        store.sleep_terms([("materials", m) for m in materials])
+        store.conn.execute("UPDATE weights SET slept_at_chain = 0")
+        store.conn.commit()
+        assert favourite_share() == 1.0
+    finally:
+        store.close()
