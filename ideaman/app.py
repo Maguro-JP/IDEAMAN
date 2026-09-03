@@ -28,6 +28,43 @@ def stock_size() -> int:
     return int(os.environ.get("IDEAMAN_STOCK", service.DEFAULT_STOCK))
 
 
+def scan_root() -> Path | None:
+    """Web から読ませてよいディレクトリの上限。未設定なら Web からは読ませない。
+
+    **Web は公開 HTTPS で動かす前提**なので、`scan` に任意のパスを受け付けると
+    誰でもファイルシステムを探れる（実際 `/etc` から語が採れた）。既定では
+    塞ぎ、運用者が明示的に開いたときだけ、その下だけを許す。
+
+    CLI と MCP は手元でユーザー自身が実行するので、この制限は掛からない。
+    """
+    raw = os.environ.get("IDEAMAN_SCAN_ROOT")
+    return Path(raw).resolve() if raw else None
+
+
+def _resolve_scan(raw: str) -> Path:
+    """Web から渡されたパスを検証する。
+
+    Raises:
+        HTTPException: 読ませてよい場所の外を指している場合。
+    """
+    root = scan_root()
+    if root is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Web からディレクトリを読む設定になっていません。"
+                "IDEAMAN_SCAN_ROOT に読ませてよい場所を指定してください"
+                "（手元なら ideaman theme --scan が使えます）"
+            ),
+        )
+    target = Path(raw).resolve()
+    if target != root and root not in target.parents:
+        raise HTTPException(
+            status_code=403, detail=f"{root} の外は読みません"
+        )
+    return target
+
+
 def embed_worker() -> bool:
     """ワーカーを Web と同じプロセスで回すか。
 
@@ -169,7 +206,7 @@ def create_theme(body: ThemeRequest, store: Store = Depends(get_store)) -> dict:
     store.add_materials(theme.id, body.materials)
     if body.scan:
         try:
-            found = harvest.harvest(Path(body.scan))
+            found = harvest.harvest(_resolve_scan(body.scan))
         except (NotADirectoryError, OSError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         store.add_materials(

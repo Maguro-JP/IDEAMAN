@@ -477,3 +477,67 @@ def test_doctor_flags_a_material_that_slipped_in_earlier(store):
     junk = next(f for f in diagnose(store).findings if "的外れ" in f.title)
     assert "予約の締切をどうするか決めきれていない" in junk.detail
     assert junk.fix and "--drop" in junk.fix
+
+
+# --- Web から任意のパスを読ませない --------------------------------------
+# Web は公開 HTTPS で動かす前提。`scan` に任意のパスを受け付けると、誰でも
+# ファイルシステムを探れる（実際 /etc から語が採れた）。
+
+
+def test_the_web_refuses_to_scan_by_default(client):
+    answer = client.post("/api/themes", json={"name": "t", "scan": "/etc"})
+    assert answer.status_code == 403
+    assert "IDEAMAN_SCAN_ROOT" in answer.json()["detail"]
+
+
+def test_the_web_stays_inside_the_allowed_root(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from ideaman.app import app
+
+    allowed = tmp_path / "work"
+    (allowed / "src").mkdir(parents=True)
+    (allowed / "src" / "a.md").write_text("配送の締切を直す。\n" * 3, encoding="utf-8")
+    outside = tmp_path / "secret"
+    outside.mkdir()
+    (outside / "b.md").write_text("忍者の名簿。\n" * 3, encoding="utf-8")
+
+    monkeypatch.setenv("IDEAMAN_DB", str(tmp_path / "s.db"))
+    monkeypatch.setenv("IDEAMAN_STOCK", "0")
+    monkeypatch.setenv("IDEAMAN_SCAN_ROOT", str(allowed))
+
+    with TestClient(app) as client:
+        assert (
+            client.post(
+                "/api/themes", json={"name": "out", "scan": str(outside)}
+            ).status_code
+            == 403
+        )
+        # `..` で外へ出ようとしても同じ
+        assert (
+            client.post(
+                "/api/themes", json={"name": "up", "scan": str(allowed / "..")}
+            ).status_code
+            == 403
+        )
+        inside = client.post(
+            "/api/themes", json={"name": "in", "scan": str(allowed / "src")}
+        )
+        assert inside.status_code == 200
+        assert "配送" in inside.json()["materials"]
+
+
+def test_symlinks_are_not_followed(tmp_path):
+    """許可された場所の中にリンクを置いても、外は読まれないこと。"""
+    from ideaman.harvest import harvest
+
+    allowed = tmp_path / "work"
+    allowed.mkdir()
+    (allowed / "a.md").write_text("配送の締切を直す。\n" * 3, encoding="utf-8")
+    outside = tmp_path / "secret.md"
+    outside.write_text("忍者の名簿。\n" * 3, encoding="utf-8")
+    (allowed / "link.md").symlink_to(outside)
+
+    terms = [c.term for c in harvest(allowed, min_files=1, include_git=False)]
+    assert "配送" in terms
+    assert "忍者" not in terms

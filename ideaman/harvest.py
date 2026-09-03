@@ -203,6 +203,9 @@ def _readable_files(root: Path) -> list[Path]:
     for path in sorted(root.rglob("*")):
         if len(files) >= MAX_FILES:
             break
+        if path.is_symlink():
+            # リンクの先は許可された場所の外かもしれない。辿らない。
+            continue
         if not path.is_file():
             continue
         if any(part in SKIP_DIRS or part.startswith(".") for part in path.parts):
