@@ -47,3 +47,17 @@ def test_cli_works_without_optional_dependencies(store, monkeypatch, tmp_path, c
     assert main(["--no-llm", "worker", "--once", "--stock", "2"]) == 0
     assert main(["diversity"]) == 0
     assert "連鎖の長さ" in capsys.readouterr().out
+
+
+def test_a_missing_chain_reads_as_a_sentence(store, monkeypatch, tmp_path, capsys):
+    """`chain 99999` が引用符付きで出ないこと。
+
+    KeyError をそのまま print すると `'…は存在しません'` になる。
+    人に見せる文なので、中身だけ出す。
+    """
+    monkeypatch.setenv("IDEAMAN_DB", str(tmp_path / "c.db"))
+    from ideaman.cli import main
+
+    assert main(["chain", "99999"]) == 1
+    err = capsys.readouterr().err.strip()
+    assert err == "アイデア 99999 は存在しません"

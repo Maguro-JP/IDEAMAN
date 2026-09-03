@@ -148,7 +148,9 @@ def cmd_chain(args: argparse.Namespace, store: Store) -> int:
     try:
         chain = store.chain(args.idea_id)
     except KeyError as exc:
-        print(exc, file=sys.stderr)
+        # KeyError をそのまま print すると引用符が付く（'…は存在しません'）。
+        # 人に見せる文なので、中身だけ出す。
+        print(exc.args[0] if exc.args else exc, file=sys.stderr)
         return 1
     for idea in chain:
         print(f"  {idea.text}")

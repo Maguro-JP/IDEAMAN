@@ -265,3 +265,29 @@ def test_qualifier_words_are_not_materials(tmp_path):
     assert "配送" in terms
     for qualifier in ("実際", "直近", "汎用", "既定"):
         assert qualifier not in terms
+
+
+def test_a_counter_fragment_is_not_a_word(tmp_path):
+    """「246件通過」から「件通過」を拾わないこと。
+
+    数字の直後から始まる日本語の連なりは助数詞の断片。自分のコミット
+    メッセージ（「テスト 246件通過」）から実際に材料に入っていた。
+    """
+    from ideaman.harvest import _words
+
+    assert "件通過" not in _words("テスト 246件通過、ruff クリーン")
+    assert "本できた" not in _words("連鎖が3本できた")
+    # 数字と関係ない語はそのまま採る
+    assert "連鎖" in _words("連鎖の長さ")
+
+
+def test_counting_adverbs_are_not_materials(tmp_path):
+    """「一度」「毎回」は回数を表す副詞で、部品ではない。"""
+    (tmp_path / "a.md").write_text(
+        "配送は一度だけ試す。毎回の確認を全部やめる。程度の問題。\n" * 3,
+        encoding="utf-8",
+    )
+    terms = [c.term for c in harvest(tmp_path, min_files=1, include_git=False)]
+    assert "配送" in terms
+    for adverb in ("一度", "毎回", "全部", "程度"):
+        assert adverb not in terms
