@@ -143,6 +143,10 @@ def build_bot(store: Store, channel_id: int):
             f"（いまは{'連想中' if state.is_associating else '放浪中'}）"
         )
 
+    # ループを Bot に付けておく。ローカル変数のままだと外から触れない＝
+    # 実 Discord に繋がずに投稿経路を確かめられない。トークンを設定して
+    # 初めて壊れているのが分かる、が一番痛い。
+    bot.drain_queue = drain_queue
     return bot
 
 
