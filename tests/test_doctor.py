@@ -166,3 +166,42 @@ def test_doctor_notices_when_the_materials_are_all_asleep(tmp_path):
 
 def _titles(diagnosis, title):
     return [f for f in diagnosis.findings if f.title == title]
+
+
+def test_every_suggested_command_is_a_real_command(tmp_path, monkeypatch):
+    """`doctor` が出す「次に打つコマンド」が、実際に受け付けられること。
+
+    助言と実装は食い違う（材料を外させておいて、在庫はそのままだった）。
+    目で読んでも気づけないので、機械で確かめる。
+    """
+    import argparse
+    import shlex
+
+    from ideaman.cli import build_parser
+    from ideaman.doctor import diagnose
+    from ideaman.store import Store
+
+    monkeypatch.setenv("IDEAMAN_DB", str(tmp_path / "cmd.db"))
+    store = Store(tmp_path / "cmd.db")
+    try:
+        theme = store.add_theme("いま取り組んでいること")
+        store.add_materials(theme.id, ["通知", "場合"])
+        store.sleep_terms([("materials", "通知"), ("materials", "場合")])
+
+        parser = build_parser()
+        checked = 0
+        for finding in diagnose(store).findings:
+            if not finding.fix:
+                continue
+            command = finding.fix.split("（")[0].split("  ")[0].strip()
+            if not command.startswith("ideaman "):
+                continue
+            argv = shlex.split(command)[1:]
+            try:
+                parser.parse_args(argv)
+            except SystemExit as exc:  # argparse は例外で落ちる
+                raise AssertionError(f"打てないコマンド: {command}") from exc
+            checked += 1
+        assert checked >= 3, "助言をほとんど確かめていない"
+    finally:
+        store.close()

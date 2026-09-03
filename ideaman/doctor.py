@@ -240,8 +240,8 @@ def _check_dormancy(store: Store) -> list[Finding]:
             "材料がほとんど眠っています",
             f"{len(materials)} 語のうち {len(asleep)} 語が休眠中です。"
             "このあいだは、あなたの語を使わない案ばかりになります。",
-            "ideaman diversity で休眠と復帰の数を見る"
-            "（材料が少なすぎるなら theme --add で足す）",
+            "ideaman diversity  （休眠と復帰の数を見る。"
+            "材料が少なすぎるなら theme --add で足す）",
         )
     ]
 
