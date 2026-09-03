@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import math
 import re
+import subprocess
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,6 +61,22 @@ PROSE_SUFFIXES = frozenset({".md", ".txt", ".rst", ".org"})
 
 #: 散文由来の語に掛ける下駄。識別子より優先させるため。
 PROSE_BONUS = 3.0
+
+#: 読むコミットの数。**コミットメッセージは「いま何に取り組んでいるか」を
+#: 本人の言葉で書いた記録**なので、材料として理想的。古い分まで読むと、
+#: とっくに終わった話題が材料に混ざるので、直近だけにする。
+GIT_LOG_LIMIT = 200
+
+#: git log を1回読むのに待つ秒数。大きなリポジトリで止まらないため。
+GIT_TIMEOUT = 10
+
+#: コミットメッセージのトレーラー行（`Co-Authored-By: ...` など）。
+#: ツールが機械的に付けるもので、**その人が考えて書いた語ではない**。
+#: 落とさないと `claude` `session` のような語が材料に混ざる。
+_TRAILER = re.compile(r"^[A-Za-z][A-Za-z-]*:\s")
+
+#: URL。ドメイン名やパスから語を拾っても意味がない。
+_URL = re.compile(r"https?://\S+")
 
 #: 漢字・カタカナの連なり。ひらがなだけの語は助詞混じりになるので採らない。
 _JA = re.compile(r"[一-龥々〆ヵヶ]{2,10}|[ァ-ヴー]{3,12}")
@@ -197,7 +214,48 @@ def _readable_files(root: Path) -> list[Path]:
     return files
 
 
-def harvest(root: Path, limit: int = 25, min_files: int = 2) -> list[Candidate]:
+def _git_log(root: Path) -> list[str]:
+    """直近のコミットメッセージ。git が無い / リポジトリでないなら空。
+
+    失敗しても例外は投げない。材料集めは「あれば嬉しい」情報の寄せ集めで、
+    一つの入手先が欠けたくらいで止まるべきではない。
+    """
+    try:
+        done = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "log",
+                f"-n{GIT_LOG_LIMIT}",
+                "--format=%s%n%b",
+                "--no-merges",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if done.returncode != 0:
+        return []
+    lines = []
+    for line in done.stdout.splitlines():
+        line = _URL.sub(" ", line).strip()
+        if not line or _TRAILER.match(line):
+            continue
+        lines.append(line)
+    return lines
+
+
+def harvest(
+    root: Path,
+    limit: int = 25,
+    min_files: int = 2,
+    *,
+    include_git: bool = True,
+) -> list[Candidate]:
     """許可された場所を読んで、材料の候補を返す。
 
     Args:
@@ -206,6 +264,9 @@ def harvest(root: Path, limit: int = 25, min_files: int = 2) -> list[Candidate]:
         min_files: 何ファイル以上に出てくる語を採るか。1 にすると、その場
             限りの変数名まで拾ってしまう。ただし小さなプロジェクトでは
             候補が空になるので、空になったら自動で 1 に緩める。
+        include_git: 直近のコミットメッセージも読むか。コードは「いま何が
+            あるか」しか語らないが、コミットメッセージは「いま何に取り
+            組んでいるか」を語る。git が無い環境では黙って飛ばす。
 
     Returns:
         点数の高い順。候補が無ければ空リスト。
@@ -221,6 +282,20 @@ def harvest(root: Path, limit: int = 25, min_files: int = 2) -> list[Candidate]:
     prose_counts: Counter[str] = Counter()
     doc_freq: defaultdict[str, int] = defaultdict(int)
     files = _readable_files(root)
+    documents = len(files)
+
+    if include_git:
+        # コミットメッセージは 1 コミット = 1 文書として数える。まとめて
+        # 1文書にすると散らばりの指標（doc_freq）が効かなくなる。
+        for message in _git_log(root):
+            words = _words(message)
+            if not words:
+                continue
+            counts.update(words)
+            prose_counts.update(words)  # 全部その人が書いた散文
+            for word in set(words):
+                doc_freq[word] += 1
+            documents += 1
 
     for path in files:
         try:
@@ -241,12 +316,17 @@ def harvest(root: Path, limit: int = 25, min_files: int = 2) -> list[Candidate]:
     if not counts:
         return []
 
-    total_files = max(len(files), 1)
+    # プロジェクト自身の名前は材料にならない。材料は**部分**であって全体では
+    # ないので、「ideamanの順番を反転させる」のような文になってしまう。
+    own_name = {root.name.lower(), root.name}
+
+
+    total_files = max(documents, 1)
 
     def scored(threshold: int) -> list[Candidate]:
         out = []
         for term, count in counts.items():
-            if term in STOPWORDS or len(term) < 2:
+            if term in STOPWORDS or term in own_name or len(term) < 2:
                 continue
             if term.isdigit():
                 continue

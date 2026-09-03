@@ -152,3 +152,79 @@ def test_seeding_never_overwrites_a_learned_weight(store, project):
         theme.id, [c.term for c in found], weights=initial_weights(found)
     )
     assert store.weights()["予約"] == grown
+
+
+# --- コミットメッセージも読む -------------------------------------------
+# コードは「いま何があるか」しか語らないが、コミットメッセージは
+# 「いま何に取り組んでいるか」を本人の言葉で語る。
+
+
+def _git_project(tmp_path, subjects):
+    import subprocess
+
+    def git(*args):
+        subprocess.run(
+            ["git", "-C", str(tmp_path), *args],
+            check=True,
+            capture_output=True,
+        )
+
+    git("init", "-q")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", ".")
+    for i, subject in enumerate(subjects):
+        (tmp_path / "a.py").write_text(f"x = {i}\n", encoding="utf-8")
+        git("add", ".")
+        git("commit", "-q", "-m", subject)
+    return tmp_path
+
+
+def test_commit_messages_become_materials(tmp_path):
+    project = _git_project(
+        tmp_path,
+        [
+            "配送の締切を見直す",
+            "配送の遅延を通知する",
+            "梱包の手順を減らす\n\n梱包が一番時間を食っている。",
+        ],
+    )
+    terms = [c.term for c in harvest(project, min_files=1)]
+    assert "配送" in terms
+    assert "梱包" in terms
+    # git を読まなければ出てこない語であること
+    without = [c.term for c in harvest(project, min_files=1, include_git=False)]
+    assert "配送" not in without
+
+
+def test_trailers_and_urls_are_not_materials(tmp_path):
+    """ツールが機械的に付ける行は、その人が考えて書いた語ではない。"""
+    project = _git_project(
+        tmp_path,
+        [
+            "在庫の棚卸しを直す\n\nCo-Authored-By: Somebody <x@example.com>\n"
+            "See: https://example.com/tickets/nagoya",
+        ]
+        * 3,
+    )
+    terms = [c.term for c in harvest(project, min_files=1)]
+    assert "在庫" in terms
+    for noise in ("somebody", "example", "nagoya", "authored"):
+        assert noise not in terms
+
+
+def test_the_projects_own_name_is_not_a_material(tmp_path):
+    """材料は部分であって全体ではない。"""
+    project = tmp_path / "sushiya"
+    project.mkdir()
+    (project / "a.md").write_text(
+        "sushiya の予約を直す。sushiya の在庫も。\n" * 3, encoding="utf-8"
+    )
+    terms = [c.term for c in harvest(project, min_files=1, include_git=False)]
+    assert "sushiya" not in terms
+
+
+def test_harvest_survives_a_directory_without_git(tmp_path):
+    (tmp_path / "a.md").write_text("会計の締めを早める。\n", encoding="utf-8")
+    assert [c.term for c in harvest(tmp_path)]
