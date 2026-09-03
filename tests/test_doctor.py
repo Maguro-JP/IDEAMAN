@@ -77,10 +77,11 @@ def test_an_idle_worker_is_reported(store):
     assert "9 時間前" in stale.detail
 
 
-def test_a_healthy_setup_reports_no_problem(store):
+def test_a_healthy_setup_reports_no_problem(store, monkeypatch):
     # pytest の一時ディレクトリは /tmp 配下なので、揮発判定に引っかかる。
     # ここで見たいのはそこではないので、永続ディスク上ということにする。
     store.path = Path("/data/ideaman.db")
+    monkeypatch.setenv("IDEAMAN_TOKEN", "s3cret")
     theme = store.add_theme("健康なテーマ")
     store.add_materials(theme.id, ["通知", "語彙", "連鎖", "在庫", "評価"])
     for _ in range(60):
@@ -106,6 +107,14 @@ def test_an_ephemeral_database_is_flagged(tmp_path):
         assert "IDEAMAN_DB" in (finding.fix or "")
     finally:
         s.close()
+
+
+def test_an_open_web_is_flagged(store, monkeypatch):
+    """鍵が無いことが見えること。手元だけなら問題ないが、公開すると危ない。"""
+    monkeypatch.delenv("IDEAMAN_TOKEN", raising=False)
+    open_web = next(f for f in diagnose(store).findings if "鍵" in f.title)
+    assert open_web.level == "warn"
+    assert "IDEAMAN_TOKEN" in (open_web.fix or "")
 
 
 @pytest.mark.parametrize("level", ["ok", "warn", "bad"])

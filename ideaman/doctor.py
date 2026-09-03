@@ -207,6 +207,36 @@ def _check_thinking(store: Store) -> list[Finding]:
     return out
 
 
+def _check_exposure() -> list[Finding]:
+    """公開する場所で無防備になっていないか。
+
+    無認証だと、URL を知った人がテーマと材料（＝あなたのプロジェクトの
+    語彙）を読み、評価を汚染し、材料を消せる。
+    """
+    import os
+
+    out: list[Finding] = []
+    if not os.environ.get("IDEAMAN_TOKEN"):
+        out.append(
+            Finding(
+                "warn",
+                "Web に鍵が掛かっていません",
+                "URL を知った人が、テーマと材料の閲覧・削除、評価の書き換えを"
+                "できます。手元だけで動かすなら問題ありません。",
+                "IDEAMAN_TOKEN=$(openssl rand -hex 16) を設定する（ASCII で）",
+            )
+        )
+    if os.environ.get("IDEAMAN_SCAN_ROOT"):
+        out.append(
+            Finding(
+                "ok",
+                "Web から読ませる場所",
+                os.environ["IDEAMAN_SCAN_ROOT"],
+            )
+        )
+    return out
+
+
 def _check_delivery(store: Store) -> list[Finding]:
     """配信が溜まりすぎていないか。
 
@@ -252,5 +282,6 @@ def diagnose(store: Store) -> Diagnosis:
     findings += _check_themes(store)
     findings += _check_thinking(store)
     findings += _check_delivery(store)
+    findings += _check_exposure()
     findings.append(_check_learning(store))
     return Diagnosis(findings)

@@ -5,14 +5,16 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
+import secrets
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from . import harvest, service
@@ -112,6 +114,12 @@ async def lifespan(app: FastAPI):
     if target > 0:
         service.prefill(store, target)
 
+    if not os.environ.get("IDEAMAN_TOKEN"):
+        log.warning(
+            "IDEAMAN_TOKEN が未設定です。公開する場所で動かすなら設定してください"
+            "（誰でもテーマ・材料の閲覧と削除ができます）"
+        )
+
     if embed_worker():
         # デーモンスレッドなので、Web が終わるときに道連れで止まる。
         # ワーカー側は例外を自分で飲み込むので、ここで落ちることはない。
@@ -134,6 +142,47 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="IDEAMAN", lifespan=lifespan)
+
+
+def _authorized(header: str, token: str) -> bool:
+    """`Authorization` ヘッダが合鍵を持っているか。
+
+    Basic と Bearer の両方を受ける。Basic を受けるのは、ブラウザが
+    自分で聞いて覚えてくれるから——UI 側に何も足さずに守れる。
+    """
+    scheme, _, value = header.partition(" ")
+    scheme = scheme.lower()
+    if scheme == "bearer":
+        return secrets.compare_digest(value.strip(), token)
+    if scheme == "basic":
+        try:
+            decoded = base64.b64decode(value.strip()).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return False
+        _, _, password = decoded.partition(":")
+        return secrets.compare_digest(password, token)
+    return False
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    """`IDEAMAN_TOKEN` があれば、合鍵を持つ人しか通さない。
+
+    **無認証のままだと、URL を知った人が何でもできる。** 実際に確かめた:
+    テーマと材料（＝あなたのプロジェクトの語彙）が読め、評価を汚染でき、
+    材料を消せ、テーマを止められた。Web は公開 HTTPS で動かす前提なので、
+    公開するなら鍵が要る。
+
+    設定しなければ素通し。手元で動かすぶんには今までどおり。
+    """
+    token = os.environ.get("IDEAMAN_TOKEN")
+    if not token or _authorized(request.headers.get("authorization", ""), token):
+        return await call_next(request)
+    return Response(
+        status_code=401,
+        content="IDEAMAN_TOKEN が要ります",
+        headers={"WWW-Authenticate": 'Basic realm="IDEAMAN"'},
+    )
 
 
 def get_store() -> Store:
