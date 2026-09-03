@@ -18,6 +18,6 @@ from pathlib import Path
 # 関数のバンドルからは、リポジトリ直下がそのまま見えるとは限らない。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ideaman.app import app  # noqa: E402
+from ideaman.app import app
 
 __all__ = ["app"]

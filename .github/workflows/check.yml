@@ -53,4 +53,4 @@ jobs:
         run: pytest -q
 
       - name: 検査
-        run: ruff check ideaman tests
+        run: ruff check ideaman tests api

@@ -18,7 +18,7 @@ from pathlib import Path
 from . import diversity, doctor, harvest, service
 from .notify import ConsoleNotifier, QueueNotifier
 from .store import Store, clean_material
-from .worker import DEFAULT_STOCK, Worker
+from .worker import DEFAULT_STOCK, TICK_SECONDS, Worker
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -54,7 +54,7 @@ def cmd_worker(args: argparse.Namespace, store: Store) -> int:
         print(f"在庫 {store.stock_count()} 件")
         return 0
     try:
-        worker.run()
+        worker.run(args.tick)
     except KeyboardInterrupt:
         print("\n止めました")
     return 0
@@ -67,6 +67,21 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
     汎用の語を衝突させた警句しか作れない。ここが有益さの入口。
     """
     if args.name is None:
+        # 名前なしで --add や --scan を渡されたら、一覧を出して終わってはいけない。
+        # **黙って何もしないのが一番悪い。** 材料を入れたつもりの人は、
+        # 出てこない理由を探すところから始めることになる。
+        asked = [
+            name
+            for name in ("add", "drop", "scan", "note", "off", "on")
+            if getattr(args, name)
+        ]
+        if asked:
+            print(
+                "どのテーマに対してかが要ります: "
+                f"ideaman theme \"テーマ名\" --{asked[0]} ...",
+                file=sys.stderr,
+            )
+            return 1
         themes = store.themes(active_only=False)
         if not themes:
             print("テーマがまだありません。\n")
@@ -184,6 +199,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_worker.add_argument("--stock", type=int, default=DEFAULT_STOCK)
     p_worker.add_argument(
         "--console", action="store_true", help="配信をターミナルにも出す"
+    )
+    p_worker.add_argument(
+        "--tick",
+        type=int,
+        default=TICK_SECONDS,
+        help="何秒ごとに様子を見るか（既定 %(default)s）",
     )
     p_worker.set_defaults(func=cmd_worker)
 
