@@ -157,6 +157,46 @@ def _llm_pick(chain: list[Idea], want: int) -> list[int] | None:
         return None
 
 
+def _pick_distinct(
+    store: Store, pending: list[Idea], scores: dict[int, float], want: int
+) -> list[int]:
+    """点数の高い順に選ぶ。ただし**一つ選ぶたびに残りを見直す**。
+
+    一度に採点して上位を取ると、同じ連鎖から選ばれた1〜2件が互いにほぼ
+    同じになりうる（実際「いちばんヘビーに使う一人のためだけに語彙を
+    作り直す」が側面違いで2件並んだ）。連鎖は同じ主題を掘るので、兄弟が
+    似るのは当たり前——だからこそ、**出す側で似ていないものを選ぶ**。
+    """
+    ranked = sorted(pending, key=lambda i: scores[i.id], reverse=True)
+    picked: list[Idea] = []
+    for _ in range(want):
+        best = None
+        best_score = float("-inf")
+        for idea in ranked:
+            if idea in picked:
+                continue
+            penalty = max(
+                (_overlap(store, idea, other) for other in picked), default=0.0
+            )
+            adjusted = scores[idea.id] - W_FRESH * penalty
+            if adjusted > best_score:
+                best, best_score = idea, adjusted
+        if best is None:
+            break
+        picked.append(best)
+    return [idea.id for idea in picked]
+
+
+def _overlap(store: Store, a: Idea, b: Idea) -> float:
+    """2件がどれだけ同じ材料でできているか（0〜1）。"""
+    ta = {term for _, term in store.terms_of(a.id)}
+    tb = {term for _, term in store.terms_of(b.id)}
+    if not ta or not tb:
+        return 0.0
+    same_shape = 1.0 if a.template_id == b.template_id else 0.0
+    return max(len(ta & tb) / len(ta | tb), same_shape * 0.6)
+
+
 def curate(store: Store, chain: list[Idea], *, use_llm: bool = True) -> list[Idea]:
     """閉じた連鎖を判定し、選ばれたものを返す。
 
@@ -188,8 +228,7 @@ def curate(store: Store, chain: list[Idea], *, use_llm: bool = True) -> list[Ide
         if use_llm:
             chosen_ids = _llm_pick(pending, want) or []
         if not chosen_ids:
-            ranked = sorted(pending, key=lambda i: scores[i.id], reverse=True)
-            chosen_ids = [idea.id for idea in ranked[:want]]
+            chosen_ids = _pick_distinct(store, pending, scores, want)
 
     chosen: list[Idea] = []
     for idea in pending:

@@ -28,6 +28,11 @@ SLOT_KINDS = {
     "operation_v": "verb",
 }
 
+#: 連鎖が持ち越すべき「主題」のプール。ここにある語は何についての思考かを
+#: 決める。provocations / probes / operations は言い回しと段取りなので、
+#: 引き継ぐと「同じ問いが話題を変えて繰り返される」形になる。
+SUBJECT_POOLS = frozenset({"materials", "concepts", "aspects"})
+
 #: 分野で絞った結果、これ未満しか残らないなら絞らない。
 #: 少なすぎる候補から引くと、分野の色ではなく同じ語の繰り返しになる。
 MIN_NARROWED = 4
@@ -190,12 +195,24 @@ def _pick_inherited(
     **今回のテンプレートが実際に使うプールの語だけを候補にする。** これを
     しないと、引き継いだつもりの語が使われず、連鎖が名ばかりになる
     （親子として記録されているのに一語も共有していない状態）。
+
+    そのうえで、**主題を担う語を優先して引き継ぐ**（`SUBJECT_POOLS`）。
+    問いかけや試し方を引き継ぐと、話題は毎回変わるのに同じ問いが繰り返される
+    ——「逆に不便にしたらどうなるか」が全体の20%を占めていた。連鎖は主題に
+    ついてのものであって、問いの形についてのものではない。
     """
     if count <= 0 or not inherit:
         return {}
     usable = [(pool, term) for pool, term in inherit if pool in usable_pools]
     if not usable:
         return {}
+    subject = [pair for pair in usable if pair[0] in SUBJECT_POOLS]
+    # 主題の語だけで足りるなら、そちらから引く。足りなければ残りで補う。
+    if len(subject) >= count:
+        usable = subject
+    elif subject:
+        rest = [pair for pair in usable if pair[0] not in SUBJECT_POOLS]
+        usable = subject + rng.sample(rest, min(count - len(subject), len(rest)))
     chosen = rng.sample(usable, min(count, len(usable)))
     carried: dict[str, list[str]] = {}
     for pool, term in chosen:

@@ -181,3 +181,47 @@ def test_curation_works_without_an_api_key(store):
     """LLM 無しでも選べる。"""
     chain = _chain(store, [f"考え{i}" for i in range(6)])
     assert curator.curate(store, chain, use_llm=True)
+
+
+# --- 同じ連鎖から選ぶ2件が似ないこと ------------------------------------
+# 連鎖は同じ主題を掘るので、兄弟が似るのは当たり前。だからこそ出す側で
+# 似ていないものを選ぶ。一度に採点して上位を取ると、「いちばんヘビーに
+# 使う一人のためだけに語彙を作り直す」が側面違いで2件並んだ。
+
+
+def test_two_picks_from_one_chain_are_not_the_same_shape(store):
+    from ideaman import service
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖", "在庫", "評価", "休眠"])
+    for _ in range(250):
+        service.generate_idea(store, use_llm=False)
+
+    chains: dict[int, list] = {}
+    for idea in sorted(store.search(None, limit=800), key=lambda i: i.id):
+        if idea.verdict == "chosen" and idea.chain_id:
+            chains.setdefault(idea.chain_id, []).append(idea)
+
+    pairs = [v for v in chains.values() if len(v) >= 2]
+    assert len(pairs) >= 5, "2件選ばれた連鎖が少なすぎて判定できない"
+    same = sum(1 for v in pairs if v[0].template_id == v[1].template_id)
+    assert same / len(pairs) < 0.25, f"同じ文型が {same}/{len(pairs)} 本で並んでいる"
+
+
+def test_picking_prefers_something_different_from_what_it_already_took(store):
+    """1件目に似たものは、点数が高くても2件目に選ばれにくいこと。"""
+    from ideaman import curator, service
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙"])
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+
+    pending = [i for i in store.search(None, limit=200)][:6]
+    assert len(pending) >= 3
+    scores = {i.id: 0.5 for i in pending}
+    # 同じ文型のものを2件用意し、点数を同じにしても両方は選ばれないこと
+    twins = [i for i in pending if i.template_id == pending[0].template_id]
+    if len(twins) >= 2:
+        picked = curator._pick_distinct(store, pending, scores, 2)
+        assert not (twins[0].id in picked and twins[1].id in picked)
