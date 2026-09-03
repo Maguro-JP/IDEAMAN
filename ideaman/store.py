@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -258,8 +258,26 @@ class Store:
         self.conn.commit()
         return self.theme_by_name(name)  # type: ignore[return-value]
 
-    def add_materials(self, theme_id: int, terms: Iterable[str]) -> int:
-        """テーマの材料を足す。すでにあるものは無視する。"""
+    def add_materials(
+        self,
+        theme_id: int,
+        terms: Iterable[str],
+        weights: Mapping[str, float] | None = None,
+    ) -> int:
+        """テーマの材料を足す。すでにあるものは無視する。
+
+        Args:
+            theme_id: 足す先のテーマ。
+            terms: 材料の語。
+            weights: 語 -> 初期の重み。`--scan` は「その語がプロジェクトの
+                どれだけ中心にあるか」を知っているのに、全部 1.0 で始めると
+                その情報を捨てることになる。中心的な語ほど引かれやすい状態
+                から始める。**既にある重み（評価で育ったもの）は上書き
+                しない**——人が付けた評価のほうが常に強い。
+
+        Returns:
+            新しく足した数。
+        """
         added = 0
         for term in terms:
             term = term.strip()
@@ -270,8 +288,22 @@ class Store:
                 (theme_id, term),
             )
             added += cur.rowcount or 0
+            if weights and term in weights:
+                self._seed_weight("materials", term, weights[term])
         self.conn.commit()
         return added
+
+    def _seed_weight(self, pool: str, term: str, weight: float) -> None:
+        """まだ重みが無い語にだけ、初期値を置く。
+
+        既にある重みは触らない。評価で育った値や、休眠の記録を
+        自動収集で踏み潰さないため。
+        """
+        weight = min(max(weight, MIN_WEIGHT), MAX_WEIGHT)
+        self.conn.execute(
+            "INSERT OR IGNORE INTO weights (pool, term, weight) VALUES (?, ?, ?)",
+            (pool, term, weight),
+        )
 
     def drop_materials(self, theme_id: int, terms: Iterable[str]) -> int:
         """材料を外す。外した数を返す。

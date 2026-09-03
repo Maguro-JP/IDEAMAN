@@ -263,11 +263,14 @@ def build_server(store: Store):
 
             from .harvest import harvest as run_harvest
 
+            from .harvest import initial_weights
+
             try:
-                harvested = [c.term for c in run_harvest(Path(scan_path))]
+                found = run_harvest(Path(scan_path))
             except (NotADirectoryError, OSError) as exc:
                 return json.dumps({"error": str(exc)}, ensure_ascii=False)
-            store.add_materials(theme.id, harvested)
+            harvested = [c.term for c in found]
+            store.add_materials(theme.id, harvested, weights=initial_weights(found))
         return json.dumps(
             {
                 **theme.to_dict(),

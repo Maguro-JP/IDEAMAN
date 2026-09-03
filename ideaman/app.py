@@ -172,7 +172,11 @@ def create_theme(body: ThemeRequest, store: Store = Depends(get_store)) -> dict:
             found = harvest.harvest(Path(body.scan))
         except (NotADirectoryError, OSError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        store.add_materials(theme.id, [c.term for c in found])
+        store.add_materials(
+            theme.id,
+            [c.term for c in found],
+            weights=harvest.initial_weights(found),
+        )
     return {**theme.to_dict(), "materials": store.materials(theme.id)}
 
 

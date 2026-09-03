@@ -124,6 +124,34 @@ class Candidate:
         return f"{self.term}（{self.count}回 / {self.files}ファイル）"
 
 
+def initial_weights(
+    candidates: "list[Candidate]", low: float = 0.7, high: float = 1.6
+) -> dict[str, float]:
+    """候補の点数を、抽選の初期重みに変換する。
+
+    `harvest` は「その語がプロジェクトのどれだけ中心にあるか」を知って
+    いるのに、全部 1.0 で始めるとその情報を捨てることになる。中心的な語
+    ほど引かれやすい状態から始めれば、評価が溜まる前から的が合う。
+
+    幅は控えめ（既定 0.7〜1.6）にしてある。抽出の点数はあくまで推測で、
+    人が付ける評価（×1.15 / ×0.85 を積む）に上書きされるべきものなので、
+    最初から大きな差を付けない。
+
+    Returns:
+        語 -> 重み。候補が1件以下なら全て 1.0。
+    """
+    if len(candidates) < 2:
+        return {c.term: 1.0 for c in candidates}
+    top = max(c.score for c in candidates)
+    bottom = min(c.score for c in candidates)
+    if top <= bottom:
+        return {c.term: 1.0 for c in candidates}
+    span = top - bottom
+    return {
+        c.term: low + (high - low) * ((c.score - bottom) / span) for c in candidates
+    }
+
+
 def _is_japanese(word: str) -> bool:
     return bool(_JA.fullmatch(word))
 

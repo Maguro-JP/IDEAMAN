@@ -108,3 +108,47 @@ def test_harvested_materials_reach_the_ideas(store, project):
     store.add_materials(theme.id, [c.term for c in harvest(project)])
     texts = [service.generate_idea(store, use_llm=False).text for _ in range(20)]
     assert any("予約" in t or "キャンセル" in t or "台帳" in t for t in texts)
+
+
+# --- 抽出の点数を初期の重みに使う ---------------------------------------
+
+
+def test_initial_weights_favour_central_words(project):
+    from ideaman.harvest import initial_weights
+
+    found = harvest(project)
+    weights = initial_weights(found)
+    assert set(weights) == {c.term for c in found}
+    # 一番中心的な語が、一番端の語より重い
+    assert weights[found[0].term] > weights[found[-1].term]
+    # ただし差は控えめ。人が付ける評価に上書きされるべきなので
+    assert all(0.5 <= w <= 2.0 for w in weights.values())
+
+
+def test_initial_weights_are_neutral_for_a_single_candidate():
+    from ideaman.harvest import Candidate, initial_weights
+
+    one = [Candidate(term="通知", count=3, files=1, score=1.0)]
+    assert initial_weights(one) == {"通知": 1.0}
+    assert initial_weights([]) == {}
+
+
+def test_seeding_never_overwrites_a_learned_weight(store, project):
+    """評価で育った重みを、自動収集が踏み潰さないこと。
+
+    人が付けた評価のほうが常に強い。ここを間違えると、--scan を
+    もう一度走らせるたびに学習が消える。
+    """
+    from ideaman.harvest import initial_weights
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["予約"])
+    store.reinforce([("materials", "予約")], 1.15)
+    grown = store.weights()["予約"]
+    assert grown > 1.0
+
+    found = harvest(project)
+    store.add_materials(
+        theme.id, [c.term for c in found], weights=initial_weights(found)
+    )
+    assert store.weights()["予約"] == grown

@@ -98,7 +98,11 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
             if args.preview:
                 print("\n（--preview なので登録していません）")
             else:
-                added = store.add_materials(theme.id, [c.term for c in found])
+                added = store.add_materials(
+                    theme.id,
+                    [c.term for c in found],
+                    weights=harvest.initial_weights(found),
+                )
                 print(f"\n材料を {added} 件足しました")
     if args.off:
         store.set_theme_active(theme.id, False)
