@@ -73,7 +73,10 @@ GIT_TIMEOUT = 10
 #: コミットメッセージのトレーラー行（`Co-Authored-By: ...` など）。
 #: ツールが機械的に付けるもので、**その人が考えて書いた語ではない**。
 #: 落とさないと `claude` `session` のような語が材料に混ざる。
-_TRAILER = re.compile(r"^[A-Za-z][A-Za-z-]*:\s")
+#:
+#: 行末で終わる形（`Claude-Session:` だけが残った行）も拾う。**判定は URL を
+#: 消す前に行う**——先に消すと、コロンの後の空白まで消えて判定が外れる。
+_TRAILER = re.compile(r"^[A-Za-z][A-Za-z-]*:(\s|$)")
 
 #: URL。ドメイン名やパスから語を拾っても意味がない。
 _URL = re.compile(r"https?://\S+")
@@ -242,9 +245,15 @@ def _git_log(root: Path) -> list[str]:
     if done.returncode != 0:
         return []
     lines = []
-    for line in done.stdout.splitlines():
-        line = _URL.sub(" ", line).strip()
-        if not line or _TRAILER.match(line):
+    for raw in done.stdout.splitlines():
+        # トレーラーかどうかは**元の行**で判断する。URL を先に消すと
+        # `Claude-Session: https://...` が `Claude-Session:` になり、
+        # コロンの後の空白が無くなって判定をすり抜ける（実際すり抜けていて、
+        # claude / session が材料に混ざっていた）。
+        if _TRAILER.match(raw.strip()):
+            continue
+        line = _URL.sub(" ", raw).strip()
+        if not line:
             continue
         lines.append(line)
     return lines

@@ -214,6 +214,27 @@ def test_trailers_and_urls_are_not_materials(tmp_path):
         assert noise not in terms
 
 
+def test_a_trailer_whose_value_is_only_a_url_is_still_a_trailer(tmp_path):
+    """`Claude-Session: https://...` を落とすこと。
+
+    URL を先に消すと `Claude-Session:` だけが残り、コロンの後の空白が
+    無くなってトレーラー判定をすり抜ける。実際すり抜けていて、claude と
+    session が材料に混ざっていた。**判定は元の行で行う。**
+    """
+    project = _git_project(
+        tmp_path,
+        [
+            "配膳の順番を直す\n\nClaude-Session: https://example.com/code/session_0123\n"
+            "Ref-Ticket: https://example.com/t/hanabi",
+        ]
+        * 3,
+    )
+    terms = [c.term for c in harvest(project, min_files=1)]
+    assert "配膳" in terms
+    for noise in ("claude", "session", "ref", "ticket", "hanabi"):
+        assert noise not in terms
+
+
 def test_the_projects_own_name_is_not_a_material(tmp_path):
     """材料は部分であって全体ではない。"""
     project = tmp_path / "sushiya"
