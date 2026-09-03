@@ -493,7 +493,8 @@ Web UI はブラウザで実際に触る（`tests/test_web_ui.py`）。JavaScrip
 .venv/bin/pytest tests/test_web_ui.py
 ```
 
-`playwright` かブラウザが無ければ、このテストだけ飛びます。
+`playwright` かブラウザが無ければ、このテストだけ飛びます。CI では
+UI に関わるものが変わったときだけ走ります（ブラウザの取得が重いので）。
 
 テストは外部 API を叩かない（`conftest.py` がキーを外す）。
 

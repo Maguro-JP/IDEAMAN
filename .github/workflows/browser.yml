@@ -1,0 +1,38 @@
+# ブラウザで Web UI を触る。
+#
+# Chromium の取得と apt が要るので**一番高い**。UI に関わるものが変わった
+# ときだけ走らせる。それ以外の変更で毎回動かす価値はない。
+
+name: browser
+
+on:
+  pull_request:
+    paths:
+      - "ideaman/static/**"
+      - "ideaman/app.py"
+      - "tests/test_web_ui.py"
+      - ".github/workflows/browser.yml"
+  # 手で走らせたいとき用。
+  workflow_dispatch:
+
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: 依存とブラウザを入れる
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,ui]"
+          python -m playwright install --with-deps chromium
+      - name: ブラウザで触る
+        run: pytest -q tests/test_web_ui.py

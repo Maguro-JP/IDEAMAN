@@ -1,78 +1,56 @@
-# テストと検査を毎回自動で走らせる。
+# テストと検査。
 #
-# このリポジトリではこれまで、書いた本人が手で走らせたときだけ検査が
-# 効いていた。走らせ忘れれば壊れたまま進む。人の記憶に頼らない。
+# **Actions の消費を抑える形にしてある。** 何も考えずに書くと、1回の push で
+# push と pull_request の両方が起動し、さらにマトリクスとジョブ分割で
+# 8ジョブ走る。実際そうなっていた。
 
 name: check
 
 on:
-  push:
-    branches: ["**"]
+  # pull_request だけにする。PR ブランチへの push でも起動するので、
+  # push トリガと併用すると同じコミットで二重に走る。
   pull_request:
+  push:
+    branches: [main]
+
+# 続けて push したら、古い実行は止める。
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # 動く下限（pyproject の requires-python）と、いま普通に使う版の両方。
-        python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
         with:
           # コミットメッセージからも材料を集めるので、履歴が要る。
-          # 浅いクローンだと収集のテストが実態と食い違う。
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          # 宣言している下限。ここで通れば新しい版でも通る（新しい構文を
+          # うっかり使っていれば、ここで落ちる）。
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
-      - name: 依存を入れる（任意の依存も含めて全経路を通す）
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,bot,mcp]"
-
-      - name: テスト
-        run: pytest -q
-
-      - name: 検査
-        run: ruff check ideaman tests
-
-  browser:
-    # Web UI は主要な入口なのに、一度も動かしていなかった。JavaScript は
-    # テストが無いと、壊れても誰も気づかない（サーバは 200 を返し続ける）。
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: 依存とブラウザを入れる
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,ui]"
-          python -m playwright install --with-deps chromium
-      - name: ブラウザで触る
-        run: pytest -q tests/test_web_ui.py
-
-  no-optional-deps:
-    # 「キーが無くても、追加依存が無くても全機能が動く」という方針を守る。
-    # 依存を入れた環境でしか通らないコードが混ざると、この方針は静かに崩れる。
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # 1つのジョブで両方の構成を見る。ジョブを分けるとランナーが増える。
       - name: 本体の依存だけ入れる
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: discord.py と mcp が無い状態でテスト
+
+      - name: 追加依存が無い状態でテスト
+        # 「キーが無くても追加依存が無くても全機能が動く」は Phase 1 からの
+        # 方針。依存を入れた環境でしか通らないコードが混ざると静かに崩れる。
         run: pytest -q
+
+      - name: 追加依存を入れる
+        run: pip install -e ".[dev,bot,mcp]"
+
+      - name: 全部入りでテスト
+        run: pytest -q
+
+      - name: 検査
+        run: ruff check ideaman tests
