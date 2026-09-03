@@ -106,7 +106,10 @@ class Worker:
         now = now or datetime.now()
         if not self.notifiers:
             return False
-        last = self.store.last_delivery_at(self.channel)
+        # **届いた時刻ではなく、配信を決めた時刻**で判断する。届いたかどうかは
+        # Bot の都合。Bot が止まっているあいだ毎 tick 配信を積み続けると、
+        # 復帰した瞬間に何百件も流れる（実測で3日で864件積んでいた）。
+        last = self.store.last_queued_at(self.channel)
         if not due_now(self.schedule, last, now):
             return False
 

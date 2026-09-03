@@ -113,3 +113,20 @@ def test_report_always_ends_with_guidance(store, level):
     text = diagnose(store).report()
     assert text.strip()
     assert text.rstrip().endswith("。")
+
+
+def test_a_pile_of_undelivered_posts_is_flagged(store):
+    """Bot が止まっている間に配信が積み上がっていないか。"""
+    from ideaman import service
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙"])
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+    ideas = [i for i in store.search(None, limit=100)][:8]
+    for idea in ideas:
+        store.queue_delivery(idea.id, "discord")
+
+    piled = next(f for f in diagnose(store).findings if "配信待ち" in f.title)
+    assert piled.level == "warn"
+    assert "8 件" in piled.title

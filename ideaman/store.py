@@ -835,7 +835,12 @@ class Store:
         return self.get(row["idea_id"]) if row else None
 
     def last_delivery_at(self, channel: str) -> datetime | None:
-        """最後に配信した時刻。落ちていた間の分をまとめて撃たないために使う。"""
+        """最後に**届いた**時刻（Bot が実際に投稿した時刻）。
+
+        `last_queued_at` との違いに注意。ワーカーのスケジュール判定に
+        これを使ってはいけない——Bot が止まっていると永久に NULL のままで、
+        毎 tick 配信を積み続けることになる。
+        """
         row = self.conn.execute(
             "SELECT sent_at FROM deliveries "
             "WHERE channel = ? AND sent_at IS NOT NULL "
@@ -843,6 +848,19 @@ class Store:
             (channel,),
         ).fetchone()
         return datetime.fromisoformat(row["sent_at"]) if row and row["sent_at"] else None
+
+    def last_queued_at(self, channel: str) -> datetime | None:
+        """最後に**配信を決めた**時刻。まだ届いていなくても数える。
+
+        ワーカーが「この時間枠はもう配信済みか」を判断するのはこちら。
+        届いたかどうかは Bot の都合であって、ワーカーの都合ではない。
+        """
+        row = self.conn.execute(
+            "SELECT created_at FROM deliveries WHERE channel = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (channel,),
+        ).fetchone()
+        return datetime.fromisoformat(row["created_at"]) if row else None
 
     # --- 評価 ---------------------------------------------------------
 

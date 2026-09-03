@@ -146,3 +146,66 @@ def test_failed_delivery_is_recorded_and_not_retried_forever(store):
     store.mark_delivered(delivery_id, None, failed=True)
 
     assert store.pending_deliveries("discord") == []
+
+
+# --- Bot が止まっていても配信を積み続けないこと --------------------------
+# ワーカーは「届いた時刻」ではなく「配信を決めた時刻」で判断する。
+# 届いたかどうかは Bot の都合であって、ワーカーの都合ではない。
+
+
+def test_the_worker_does_not_queue_on_every_tick(store, monkeypatch):
+    """Bot が一度も投稿していなくても、1日3回で止まること。
+
+    `last_delivery_at`（Bot が投稿した時刻）で判断していたとき、Bot が
+    動いていないと永久に「まだ配っていない」になり、**3日で864件**積んで
+    いた。復帰した瞬間に全部流れる——「ずっとアイデアが溢れてくる Bot」。
+    """
+    from datetime import datetime, timedelta
+
+    import ideaman.store as store_module
+    from ideaman import service
+    from ideaman.notify import QueueNotifier
+    from ideaman.worker import Worker, parse_schedule
+
+    clock = {"now": datetime(2026, 9, 1, 0, 0)}
+    monkeypatch.setattr(store_module, "_now", lambda: clock["now"].isoformat())
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖", "在庫"])
+    for _ in range(80):
+        service.generate_idea(store, use_llm=False)
+
+    worker = Worker(
+        store,
+        [QueueNotifier(store, "discord")],
+        stock=3,
+        schedule=parse_schedule("08:00,13:00,21:00"),
+        use_llm=False,
+    )
+
+    delivered = 0
+    for minute in range(0, 2 * 24 * 60, 5):
+        clock["now"] = datetime(2026, 9, 1, 0, 0) + timedelta(minutes=minute)
+        if worker.maybe_deliver(clock["now"]):
+            delivered += 1
+
+    # 2日 = 6回 + 起動直後の1回。Bot は一度も投稿していない。
+    assert delivered <= 8, f"{delivered} 件も積んでいる"
+    assert delivered >= 6, f"{delivered} 件しか配っていない"
+    assert store.last_delivery_at("discord") is None, "前提が崩れている"
+
+
+def test_queued_and_delivered_are_different_questions(store):
+    """「配信を決めた」と「届いた」を混同しないこと。"""
+    from ideaman import service
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙"])
+    idea = service.generate_idea(store, use_llm=False)
+
+    delivery_id = store.queue_delivery(idea.id, "discord")
+    assert store.last_queued_at("discord") is not None
+    assert store.last_delivery_at("discord") is None, "まだ誰も見ていない"
+
+    store.mark_delivered(delivery_id, "123")
+    assert store.last_delivery_at("discord") is not None

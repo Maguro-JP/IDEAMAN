@@ -203,6 +203,29 @@ def _check_thinking(store: Store) -> list[Finding]:
     return out
 
 
+def _check_delivery(store: Store) -> list[Finding]:
+    """配信が溜まりすぎていないか。
+
+    Bot が止まっているのに配信が積み上がっていると、復帰した瞬間に全部
+    流れる。かつてワーカーが毎 tick 積んでいたときの症状なので、再発を
+    ここでも見張る。
+    """
+    pending = store.conn.execute(
+        "SELECT COUNT(*) AS n FROM deliveries WHERE state = 'pending'"
+    ).fetchone()["n"]
+    if pending > 5:
+        return [
+            Finding(
+                "warn",
+                f"配信待ちが {pending} 件あります",
+                "Bot が動いていない可能性があります。このまま Bot を起動すると、"
+                "溜まっていた分がまとめて流れます。",
+                "ideaman.bots.discord_bot を起動する / 溜まった分を消す",
+            )
+        ]
+    return []
+
+
 def _check_learning(store: Store) -> Finding:
     row = store.conn.execute(
         "SELECT COUNT(*) AS n FROM ratings WHERE score != 0"
@@ -224,5 +247,6 @@ def diagnose(store: Store) -> Diagnosis:
     findings = [_check_storage(store)]
     findings += _check_themes(store)
     findings += _check_thinking(store)
+    findings += _check_delivery(store)
     findings.append(_check_learning(store))
     return Diagnosis(findings)
