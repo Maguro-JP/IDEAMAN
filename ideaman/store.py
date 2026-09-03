@@ -9,7 +9,7 @@ import json
 import os
 import sqlite3
 import threading
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,8 +99,29 @@ class Idea:
         }
 
 
+#: いまの時刻を返す関数。**ここを差し替えると時間を進められる。**
+#:
+#: このシステムは何週間も回り続けるのが本体なのに、時刻の読み取りが
+#: あちこちに散っていて長期挙動を検証できなかった（休眠が明けるか、
+#: 語彙が枯れないか）。書き込みと読み取りの時刻がずれると測定にならない
+#: ので、入口を1つにしてある。
+_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
+
+
+def set_clock(clock: Callable[[], datetime] | None) -> None:
+    """時計を差し替える。`None` で実時刻に戻す。テストと長期検証のため。"""
+    global _clock
+    _clock = clock or (lambda: datetime.now(timezone.utc))
+
+
+def utcnow() -> datetime:
+    """いまの時刻（tz 付き）。引数名 `now` と紛れないよう別名にしてある。"""
+    moment = _clock()
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return utcnow().isoformat()
 
 
 def _row_to_theme(row: sqlite3.Row) -> Theme:
@@ -416,7 +437,7 @@ class Store:
 
     def revived_count(self, now: datetime | None = None) -> int:
         """休眠が明けて戻ってきた語の数。"""
-        now = now or datetime.now(timezone.utc)
+        now = now or utcnow()
         row = self.conn.execute(
             "SELECT COUNT(*) AS n FROM weights "
             "WHERE dormant_until IS NOT NULL AND dormant_until <= ?",
@@ -434,7 +455,7 @@ class Store:
         捨てるのでも重みを下げるのでもない。抽選から一時的に外すだけで、
         時間が来れば戻ってくる（頭の片隅に置いておく）。
         """
-        now = now or datetime.now(timezone.utc)
+        now = now or utcnow()
         for pool, term in terms:
             row = self.conn.execute(
                 "SELECT weight, stall_count FROM weights WHERE pool = ? AND term = ?",
@@ -455,7 +476,7 @@ class Store:
 
     def dormant_terms(self, now: datetime | None = None) -> list[str]:
         """いま眠っている語（aspiration で通るものは除く）。"""
-        now = now or datetime.now(timezone.utc)
+        now = now or utcnow()
         rows = self.conn.execute(
             "SELECT term, weight, dormant_until FROM weights "
             "WHERE dormant_until IS NOT NULL AND dormant_until > ?",

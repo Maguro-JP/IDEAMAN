@@ -101,7 +101,12 @@ def measure(store: Store, limit: int = 500) -> Health:
             term_counts[term] += 1
 
     lexicon = default_lexicon()
-    vocabulary = sum(len(terms) for terms in lexicon.pools.values())
+    # 材料も語彙のうち。分母に入れないと 100% を超える（実際 101% が出た）。
+    materials = {
+        row["term"]
+        for row in store.conn.execute("SELECT DISTINCT term FROM theme_terms")
+    }
+    vocabulary = sum(len(terms) for terms in lexicon.pools.values()) + len(materials)
     health.coverage = len(term_counts) / vocabulary if vocabulary else 0.0
     drawn = sum(term_counts.values())
     health.top_share = (
