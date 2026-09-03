@@ -37,7 +37,14 @@ ideaman theme                      # 一覧
 ```
 
 `--scan` を付けると、**そこで実際に使われている語を読み取って材料にします**。
-`--preview` を足せば、登録せずに何が採れるかだけ見られます。手で登録するのが
+`--preview` を足せば、登録せずに何が採れるかだけ見られます。いらない語が
+混ざったら `--drop` で外します（Web では材料をクリック）。1語でも的外れな
+ものが残っていると、その語を含む案が出続けます。
+
+```bash
+ideaman theme "IDEAMANを伸ばす" --drop 場合,時間
+```
+手で登録するのが
 面倒で放置されると、結局汎用の警句に戻るので、ここを自動にしてあります。
 
 抽出は完全にオフライン（`ideaman/harvest.py`）。素朴な TF-IDF に、一つだけ
@@ -252,6 +259,7 @@ ideaman idea                # ターミナルで一つ受け取る
 ideaman chain 42            # 連鎖を辿る
 ideaman theme "..." --scan .           # 読ませて材料を自動収集
 ideaman theme "..." --add "通知,語彙"   # 手で足す
+ideaman theme "..." --drop "場合"       # いらない語を外す
 ideaman theme               # テーマ一覧
 ```
 
@@ -334,6 +342,7 @@ LLM は**オプション**であって前提ではない。
 | `GET /api/themes` | テーマと材料の一覧 |
 | `POST /api/themes` | `{"name", "note", "materials": [...], "scan": "パス"}`（同名なら材料を足す。`scan` でディレクトリから自動収集） |
 | `POST /api/themes/{id}/active?active=` | そのテーマを休ませる / 再開する |
+| `POST /api/themes/{id}/materials/drop` | `{"materials": ["場合"]}` で材料を外す |
 
 ## テスト
 

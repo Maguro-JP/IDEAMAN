@@ -85,6 +85,9 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
     if args.add:
         added = store.add_materials(theme.id, args.add.split(","))
         print(f"材料を {added} 件足しました")
+    if args.drop:
+        dropped = store.drop_materials(theme.id, args.drop.split(","))
+        print(f"材料を {dropped} 件外しました")
     if args.scan:
         found = harvest.harvest(Path(args.scan), limit=args.scan_limit)
         if not found:
@@ -163,6 +166,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_theme.add_argument("name", nargs="?", help="テーマ名。省略すると一覧")
     p_theme.add_argument("--add", help="材料をカンマ区切りで足す（例: 通知,語彙,連鎖）")
+    p_theme.add_argument(
+        "--drop", help="材料をカンマ区切りで外す（--scan で入った不要な語を消す）"
+    )
     p_theme.add_argument(
         "--scan",
         metavar="PATH",

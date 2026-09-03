@@ -279,3 +279,31 @@ def test_old_stock_comes_back_when_every_theme_is_paused(store):
 
     store.set_theme_active(theme.id, False)
     assert store.stock_count() == before
+
+
+def test_materials_can_be_dropped(store):
+    """`--scan` は25語まとめて入れるので、外す手段が要る。
+
+    いらない語が1つ混ざるだけで、その語を含む案が出続ける。
+    """
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "場合", "語彙"])
+    assert store.drop_materials(theme.id, ["場合"]) == 1
+    assert store.materials(theme.id) == ["通知", "語彙"]
+    # 無い語を外しても壊れない
+    assert store.drop_materials(theme.id, ["存在しない語"]) == 0
+
+
+def test_drop_materials_api(client):
+    created = client.post(
+        "/api/themes", json={"name": "t", "materials": ["通知", "場合"]}
+    ).json()
+    res = client.post(
+        f"/api/themes/{created['id']}/materials/drop", json={"materials": ["場合"]}
+    )
+    assert res.status_code == 200
+    assert res.json()["materials"] == ["通知"]
+    assert (
+        client.post("/api/themes/999/materials/drop", json={"materials": ["x"]}).status_code
+        == 404
+    )

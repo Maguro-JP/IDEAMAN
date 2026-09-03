@@ -60,6 +60,12 @@ class ThemeRequest(BaseModel):
     scan: str | None = Field(None, max_length=1000)
 
 
+class MaterialsRequest(BaseModel):
+    """材料だけを載せた要求。いまは取り外しにだけ使う。"""
+
+    materials: list[str] = Field(default_factory=list)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """起動時に保管庫を開き、在庫を用意しておく。"""
@@ -168,6 +174,21 @@ def create_theme(body: ThemeRequest, store: Store = Depends(get_store)) -> dict:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         store.add_materials(theme.id, [c.term for c in found])
     return {**theme.to_dict(), "materials": store.materials(theme.id)}
+
+
+@app.post("/api/themes/{theme_id}/materials/drop")
+def drop_materials(
+    theme_id: int,
+    body: MaterialsRequest,
+    store: Store = Depends(get_store),
+) -> dict:
+    """材料を外す。`scan` で入った不要な語を消すため。"""
+    if store.theme(theme_id) is None:
+        raise HTTPException(status_code=404, detail=f"テーマ {theme_id} は存在しません")
+    store.drop_materials(theme_id, body.materials)
+    theme = store.theme(theme_id)
+    assert theme is not None
+    return {**theme.to_dict(), "materials": store.materials(theme_id)}
 
 
 @app.post("/api/themes/{theme_id}/active")

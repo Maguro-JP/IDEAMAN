@@ -110,6 +110,13 @@
   #theme-list li.off { opacity: .4; }
   .theme-name { display: flex; justify-content: space-between; gap: .8rem; align-items: baseline; }
   .theme-mats { color: var(--dim); font-size: .78rem; }
+  .mat {
+    background: none; border: 1px solid var(--line); color: var(--dim);
+    font-family: inherit; font-size: .75rem; padding: .15rem .5rem;
+    margin: .15rem .2rem .15rem 0; border-radius: 4px; cursor: pointer;
+  }
+  .mat:hover { border-color: var(--accent); color: var(--accent); }
+  .mat:hover::after { content: " ×"; }
   .theme-toggle {
     background: none; border: 1px solid var(--line); color: var(--dim);
     font-family: inherit; font-size: .7rem; padding: .2rem .6rem;
@@ -291,9 +298,27 @@ async function loadThemes() {
 
       const mats = document.createElement("div");
       mats.className = "theme-mats";
-      mats.textContent = theme.materials.length
-        ? theme.materials.join("、")
-        : "材料がまだありません";
+      if (!theme.materials.length) {
+        mats.textContent = "材料がまだありません";
+      } else {
+        // 一語ずつ外せるようにする。--scan は25語まとめて入れるので、
+        // 外す手段が無いと、いらない語を含む案が出続ける。
+        for (const term of theme.materials) {
+          const chip = document.createElement("button");
+          chip.className = "mat";
+          chip.textContent = term;
+          chip.title = "外す";
+          chip.addEventListener("click", async () => {
+            await api(`/api/themes/${theme.id}/materials/drop`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ materials: [term] }),
+            });
+            loadThemes();
+          });
+          mats.appendChild(chip);
+        }
+      }
 
       li.append(head, mats);
       list.appendChild(li);

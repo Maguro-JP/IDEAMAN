@@ -273,6 +273,25 @@ class Store:
         self.conn.commit()
         return added
 
+    def drop_materials(self, theme_id: int, terms: Iterable[str]) -> int:
+        """材料を外す。外した数を返す。
+
+        `--scan` は 25 語まとめて入れるので、外す手段が無いと使えない
+        （いらない語が1つ混ざるだけで、その語を含む案が出続ける）。
+        """
+        dropped = 0
+        for term in terms:
+            term = term.strip()
+            if not term:
+                continue
+            cur = self.conn.execute(
+                "DELETE FROM theme_terms WHERE theme_id = ? AND term = ?",
+                (theme_id, term),
+            )
+            dropped += cur.rowcount or 0
+        self.conn.commit()
+        return dropped
+
     def materials(self, theme_id: int) -> list[str]:
         rows = self.conn.execute(
             "SELECT term FROM theme_terms WHERE theme_id = ? ORDER BY id", (theme_id,)

@@ -106,6 +106,10 @@ operations:
   - {term: 途中から参加できるようにする, domains: [time, social]}
 
 constraints:
+  # 「〜として作り直すとしたら」の前に置く縛り。恣意的であること自体に
+  # 意味がある（オズボーン／SCAMPER の制約法）が、**身体や天候の縛りは
+  # 抽象的な材料に掛からない**。「立ったままで在庫を扱うとする」は無意味。
+  # だから設計上の縛りに言い換えてある。物にも仕組みにも同じように効く。
   - {term: 十秒以内で, domains: [time]}
   - {term: 一人きりで, domains: [social]}
   - {term: 声だけで, domains: [sound, sense]}
@@ -115,16 +119,21 @@ constraints:
   - {term: 一日一回だけ, domains: [time, rule]}
   - {term: 見知らぬ人と, domains: [social, trust]}
   - {term: 説明書なしで, domains: [ux, learning]}
-  - {term: 夜のあいだだけ, domains: [time]}
   - {term: 三つの部品だけで, domains: [structure]}
   - {term: 元に戻せない形で, domains: [rule, time]}
   - {term: 誰にも見られずに, domains: [trust, identity]}
-  - {term: 立ったままで, domains: [physical]}
-  - {term: 雨の日に限って, domains: [nature, time]}
-  - {term: 電気を使わずに, domains: [physical, economy]}
   - {term: 十年続く前提で, domains: [time]}
   - {term: 子どもにも分かる形で, domains: [learning, language]}
   - {term: 手放すことを前提に, domains: [economy, emotion]}
+  # 身体・天候だったものを、設計上の縛りに置き換えたもの
+  - {term: 立ったまま終わる速さで, domains: [time, physical]}
+  - {term: 調子の悪い日でも回る形で, domains: [rule, nature]}
+  - {term: 自動化を一切使わずに, domains: [physical, economy]}
+  # 引き継ぎと撤退。作るときに一番考えないが、一番効く縛り
+  - {term: いつでも後戻りできる形で, domains: [rule]}
+  - {term: 明日引き継ぐ前提で, domains: [social, learning]}
+  - {term: 半分の手間で, domains: [economy, ux]}
+  - {term: 失敗しても誰も困らない形で, domains: [rule, trust]}
 
 provocations:
   - {term: それは本当に必要か, domains: [rule]}
