@@ -197,3 +197,85 @@ def test_curator_avoids_repeating_the_same_sentence_shape(store):
     # 完全に禁じはしない（良い案なら型が被っても出す）が、半分は超えない
     assert repeats < len(chosen) / 2
     assert curator.W_FRESH > 0
+
+
+def test_stock_made_before_a_theme_existed_is_served_last(store):
+    """テーマ登録直後のボタンで、汎用の在庫が先に出ないこと。
+
+    新規デプロイで実際に起きた: 起動時の先読みがテーマ無しの在庫を作り、
+    その後テーマを登録しても、最初の1件は汎用の警句だった。
+    """
+    # テーマがまだ無い状態で在庫を作る
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+    themeless = [
+        i
+        for i in store.search(None, limit=200)
+        if i.verdict == "chosen" and i.state == "unseen"
+    ]
+    assert themeless, "前提となる汎用の在庫が作れていない"
+
+    # あとからテーマを登録し、そのテーマの在庫も作る
+    theme = store.add_theme("あとから登録")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖"])
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+
+    taken = store.take_ready()
+    assert taken is not None
+    assert taken.theme_id == theme.id
+
+
+def test_stock_from_a_paused_theme_is_served_last(store):
+    """休ませたテーマの在庫も後回しになること。"""
+    old = store.add_theme("休むほう")
+    store.add_materials(old.id, ["帳簿"])
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+    store.set_theme_active(old.id, False)
+
+    now = store.add_theme("いまのほう")
+    store.add_materials(now.id, ["通知"])
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+
+    taken = store.take_ready()
+    assert taken is not None
+    assert taken.theme_id == now.id
+
+
+def test_themeless_stock_is_not_served_while_a_theme_is_active(store):
+    """テーマ付きの在庫がまだ1件も無くても、汎用の在庫で埋め合わせない。
+
+    並べ替えだけでは足りなかった箇所。テーマを登録した「直後」は、
+    そのテーマの在庫がまだ存在しないので、順番を後ろにしただけでは
+    結局テーマ無しが出てしまう。
+    """
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+    assert store.stock_count() > 0
+
+    theme = store.add_theme("いま考えたいこと")
+    store.add_materials(theme.id, ["通知"])
+
+    # このテーマの在庫はまだ 0。汎用在庫があっても出さない。
+    assert store.stock_count() == 0
+    assert store.take_ready() is None
+
+    # その場で考えれば、ちゃんとテーマのものが返る
+    fresh = service.receive_idea(store, use_llm=False)
+    assert fresh.theme_id == theme.id
+
+
+def test_old_stock_comes_back_when_every_theme_is_paused(store):
+    """テーマ無しの在庫は捨てない。全部休ませれば戻ってくる。"""
+    for _ in range(40):
+        service.generate_idea(store, use_llm=False)
+    before = store.stock_count()
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知"])
+    assert store.stock_count() == 0
+
+    store.set_theme_active(theme.id, False)
+    assert store.stock_count() == before

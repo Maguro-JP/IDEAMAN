@@ -509,12 +509,23 @@ class Store:
 
         FIFO ではなくスコアの高い順に出す。溜まった `chosen` は質のプール
         として機能させる。
+
+        **有効なテーマが一つでもあれば、そのテーマの在庫しか出さない。**
+        起動時の先読みで作ったテーマ無しの在庫が、後から登録したテーマより
+        先に出ると、テーマを登録した直後のボタンで汎用の警句が返る（実際に
+        新規デプロイでこれが起きた）。並べ替えでは足りない——テーマ付きの
+        在庫がまだ1件も無い瞬間は、結局テーマ無しが出てしまうため。
+
+        古い在庫は**消さない**。全テーマを休ませれば、また出てくる。
+        該当が無ければ None を返し、呼び出し側がその場で考える。
         """
         clause = "state = 'unseen' AND verdict = 'chosen'"
         params: tuple = ()
         if domain is not None:
             clause += " AND domain = ?"
             params = (domain,)
+        if self.themes(active_only=True):
+            clause += " AND theme_id IN (SELECT id FROM themes WHERE active = 1)"
         row = self.conn.execute(
             f"SELECT * FROM ideas WHERE {clause} ORDER BY pick_score DESC, id LIMIT 1",
             params,
@@ -542,12 +553,17 @@ class Store:
 
         「考えた数」ではなく「選ばれてまだ出していない数」。連鎖の途中の
         独り言は含まない。
+
+        `take_ready` と同じ条件で数える。ここがずれると「5個溜まっている」
+        と表示しながらボタンを押すと在庫が使われない、という嘘になる。
         """
         clause = "state = 'unseen' AND verdict = 'chosen'"
         params: tuple = ()
         if domain is not None:
             clause += " AND domain = ?"
             params = (domain,)
+        if self.themes(active_only=True):
+            clause += " AND theme_id IN (SELECT id FROM themes WHERE active = 1)"
         row = self.conn.execute(
             f"SELECT COUNT(*) AS n FROM ideas WHERE {clause}", params
         ).fetchone()
