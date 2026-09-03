@@ -225,7 +225,10 @@ def build_server(store: Store):
         ),
     )
     def register_theme(
-        name: str, materials: list[str] | None = None, note: str | None = None
+        name: str,
+        materials: list[str] | None = None,
+        note: str | None = None,
+        scan_path: str | None = None,
     ) -> str:
         """IDEAMAN に「いま何について考えてほしいか」を教える。
 
@@ -242,14 +245,35 @@ def build_server(store: Store):
             materials: ユーザー自身の語。**普通名詞の部品名がよい**
                 （例: ["通知", "語彙", "連鎖", "評価"]）。文章ではなく単語。
             note: 補足。
+            scan_path: 読ませるディレクトリの絶対パス。**指定すると、そこで
+                実際に使われている語を自動で材料にする。** ユーザーが作業中の
+                リポジトリの場所が分かっているなら、`materials` を推測するより
+                こちらのほうが正確（その人が自分で書いた語だけが採れる）。
+                ユーザーが見せてよいと言った場所にだけ使うこと。
 
         Returns:
             JSON 文字列。`{"id": int, "name": str, "materials": [...]}`。
+            `scan_path` を使った場合は `harvested` に自動で採った語が入る。
         """
         theme = store.add_theme(name, note)
         store.add_materials(theme.id, materials or ())
+        harvested: list[str] = []
+        if scan_path:
+            from pathlib import Path
+
+            from .harvest import harvest as run_harvest
+
+            try:
+                harvested = [c.term for c in run_harvest(Path(scan_path))]
+            except (NotADirectoryError, OSError) as exc:
+                return json.dumps({"error": str(exc)}, ensure_ascii=False)
+            store.add_materials(theme.id, harvested)
         return json.dumps(
-            {**theme.to_dict(), "materials": store.materials(theme.id)},
+            {
+                **theme.to_dict(),
+                "materials": store.materials(theme.id),
+                "harvested": harvested,
+            },
             ensure_ascii=False,
             indent=2,
         )

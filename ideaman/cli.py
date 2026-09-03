@@ -12,8 +12,9 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
-from . import diversity, service
+from . import diversity, harvest, service
 from .notify import ConsoleNotifier, QueueNotifier
 from .store import Store
 from .worker import DEFAULT_STOCK, Worker
@@ -84,6 +85,18 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
     if args.add:
         added = store.add_materials(theme.id, args.add.split(","))
         print(f"材料を {added} 件足しました")
+    if args.scan:
+        found = harvest.harvest(Path(args.scan), limit=args.scan_limit)
+        if not found:
+            print(f"{args.scan} から材料になりそうな語が見つかりませんでした")
+        else:
+            for candidate in found:
+                print(f"  {candidate}")
+            if args.preview:
+                print("\n（--preview なので登録していません）")
+            else:
+                added = store.add_materials(theme.id, [c.term for c in found])
+                print(f"\n材料を {added} 件足しました")
     if args.off:
         store.set_theme_active(theme.id, False)
         print("このテーマについては考えないようにしました")
@@ -150,6 +163,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_theme.add_argument("name", nargs="?", help="テーマ名。省略すると一覧")
     p_theme.add_argument("--add", help="材料をカンマ区切りで足す（例: 通知,語彙,連鎖）")
+    p_theme.add_argument(
+        "--scan",
+        metavar="PATH",
+        help="そのディレクトリを読んで材料を自分で集める（閲覧許可を与える）",
+    )
+    p_theme.add_argument("--scan-limit", type=int, default=25, help="集める語の数")
+    p_theme.add_argument(
+        "--preview", action="store_true", help="--scan の結果を見るだけで登録しない"
+    )
     p_theme.add_argument("--note", help="補足")
     p_theme.add_argument("--off", action="store_true", help="このテーマを一旦休む")
     p_theme.add_argument("--on", action="store_true", help="再開する")

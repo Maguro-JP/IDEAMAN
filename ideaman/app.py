@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from . import service
+from . import harvest, service
 from .engine.lexicon import all_domains, default_lexicon
 from .store import Store
 
@@ -55,6 +55,9 @@ class ThemeRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     note: str | None = Field(None, max_length=500)
     materials: list[str] = Field(default_factory=list)
+    #: 読ませるディレクトリ。指定すると、そこで実際に使われている語を
+    #: 材料として自動で集める（手で登録する手間が有益さの最大の障壁）。
+    scan: str | None = Field(None, max_length=1000)
 
 
 @asynccontextmanager
@@ -158,6 +161,12 @@ def create_theme(body: ThemeRequest, store: Store = Depends(get_store)) -> dict:
     """テーマを登録し、材料を足す。同名なら既存のものに足す。"""
     theme = store.add_theme(body.name, body.note)
     store.add_materials(theme.id, body.materials)
+    if body.scan:
+        try:
+            found = harvest.harvest(Path(body.scan))
+        except (NotADirectoryError, OSError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        store.add_materials(theme.id, [c.term for c in found])
     return {**theme.to_dict(), "materials": store.materials(theme.id)}
 
 

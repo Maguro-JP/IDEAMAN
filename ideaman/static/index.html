@@ -155,11 +155,14 @@
     <p id="theme-why">
       材料（あなた自身の言葉）を入れるほど、出てくる案が手元の課題に近づきます。
       何も登録していないと、汎用の語をぶつけただけの警句になります。
+      ディレクトリを指定すれば、そこで実際に使われている語を読み取って
+      材料にします。
     </p>
     <ul id="theme-list"></ul>
     <form id="theme-form">
       <input id="theme-name" placeholder="テーマ（例: IDEAMANを伸ばす）" maxlength="100" required>
       <input id="theme-materials" placeholder="材料をカンマ区切りで（例: 通知,語彙,連鎖）">
+      <input id="theme-scan" placeholder="読ませるディレクトリ（任意。材料を自動で集めます）">
       <input id="theme-note" placeholder="補足（任意）" maxlength="500">
       <button type="submit">登録する</button>
     </form>
@@ -312,10 +315,12 @@ el("theme-form").addEventListener("submit", async (ev) => {
         name,
         note: el("theme-note").value.trim() || null,
         materials,
+        scan: el("theme-scan").value.trim() || null,
       }),
     });
     el("theme-name").value = "";
     el("theme-materials").value = "";
+    el("theme-scan").value = "";
     el("theme-note").value = "";
     loadThemes();
   } catch (e) { console.error(e); }
