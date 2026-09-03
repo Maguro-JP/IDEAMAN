@@ -76,35 +76,41 @@ concepts:
   - {term: 敬語, domains: [language, social]}
 
 operations:
-  - {term: 反転させる, domains: [structure]}
-  - {term: 半分に削る, domains: [structure]}
-  - {term: 逆順で始める, domains: [time, structure]}
-  - {term: 誰か他人に委ねる, domains: [social]}
-  - {term: 一切見えなくする, domains: [sense]}
-  - {term: 一度だけ許す, domains: [rule]}
-  - {term: 十年後に届ける, domains: [time]}
-  - {term: 音だけで表す, domains: [sense, sound]}
-  - {term: わざと失敗させる, domains: [play, rule]}
-  - {term: 全部公開する, domains: [trust, social]}
-  - {term: 数を数えるのをやめる, domains: [rule, information]}
-  - {term: 引き継げるようにする, domains: [social, time]}
-  - {term: 使い捨てにする, domains: [economy, rule]}
-  - {term: 自動で忘れさせる, domains: [memory, rule]}
-  - {term: 二人でないと動かなくする, domains: [social, rule]}
-  - {term: 遅延させる, domains: [time, ux]}
-  - {term: 手で触れるようにする, domains: [physical, sense]}
-  - {term: 増殖させる, domains: [structure]}
-  - {term: 一行だけにする, domains: [structure, language]}
-  - {term: 場所に縛りつける, domains: [space, rule]}
-  - {term: 天気に連動させる, domains: [nature, system]}
-  - {term: 順番待ちを可視化する, domains: [system, ux]}
-  - {term: 主役と脇役を入れ替える, domains: [story, structure]}
-  - {term: 未完成のまま渡す, domains: [creation, social]}
-  - {term: 声に出させる, domains: [sound, social]}
-  - {term: 毎回違う姿にする, domains: [identity, play]}
-  - {term: 誰のものでもなくする, domains: [economy, trust]}
-  - {term: 途中から参加できるようにする, domains: [time, social]}
-
+  # 「{aspect}を◯◯」の形で使う動詞。
+  #
+  # kind: verb   … 自分の目的語を持たない。「頻度を反転させる」と書ける
+  # kind: phrase … すでに目的語を含む（「主役と脇役を入れ替える」）。
+  #   これを「{aspect}を」の後ろに置くと「を」が二重になって壊れるので、
+  #   引用の位置（鍵は「◯◯」こと／◯◯くらいまで）でだけ使う。
+  #   削らないのは、引用の位置では phrase のほうが具体的で強いから。
+  - {term: 反転させる, domains: [structure], kind: verb}
+  - {term: 半分に削る, domains: [structure], kind: verb}
+  - {term: 逆順で始める, domains: [time, structure], kind: verb}
+  - {term: 誰か他人に委ねる, domains: [social], kind: verb}
+  - {term: 一切見えなくする, domains: [sense], kind: verb}
+  - {term: 一度だけ許す, domains: [rule], kind: verb}
+  - {term: 十年後に届ける, domains: [time], kind: verb}
+  - {term: 音だけで表す, domains: [sense, sound], kind: verb}
+  - {term: わざと失敗させる, domains: [play, rule], kind: verb}
+  - {term: 全部公開する, domains: [trust, social], kind: verb}
+  - {term: 数を数えるのをやめる, domains: [rule, information], kind: phrase}
+  - {term: 引き継げるようにする, domains: [social, time], kind: verb}
+  - {term: 使い捨てにする, domains: [economy, rule], kind: verb}
+  - {term: 自動で忘れさせる, domains: [memory, rule], kind: verb}
+  - {term: 二人でないと動かなくする, domains: [social, rule], kind: verb}
+  - {term: 遅延させる, domains: [time, ux], kind: verb}
+  - {term: 手で触れるようにする, domains: [physical, sense], kind: verb}
+  - {term: 増殖させる, domains: [structure], kind: verb}
+  - {term: 一行だけにする, domains: [structure, language], kind: verb}
+  - {term: 場所に縛りつける, domains: [space, rule], kind: verb}
+  - {term: 天気に連動させる, domains: [nature, system], kind: verb}
+  - {term: 順番待ちを可視化する, domains: [system, ux], kind: phrase}
+  - {term: 主役と脇役を入れ替える, domains: [story, structure], kind: phrase}
+  - {term: 未完成のまま渡す, domains: [creation, social], kind: verb}
+  - {term: 声に出させる, domains: [sound, social], kind: verb}
+  - {term: 毎回違う姿にする, domains: [identity, play], kind: verb}
+  - {term: 誰のものでもなくする, domains: [economy, trust], kind: verb}
+  - {term: 途中から参加できるようにする, domains: [time, social], kind: verb}
 constraints:
   # 「〜として作り直すとしたら」の前に置く縛り。恣意的であること自体に
   # 意味がある（オズボーン／SCAMPER の制約法）が、**身体や天候の縛りは

@@ -78,6 +78,19 @@ def score(store: Store, idea: Idea) -> float:
     else:
         fresh = 1.0
 
+    # 文型だけでは足りない。「いちばんヘビーに使う一人のためだけに◯◯を
+    # 作り直す。まず**頻度**が変わるはず」が、材料だけ変えて何度も出ていた。
+    # 側面や操作が重なっていれば、材料が違っても同じ案に見える。
+    mine = {term for _, term in terms}
+    if mine:
+        overlaps = []
+        for position, past in enumerate(store.recent_chosen_terms(FRESHNESS_WINDOW)):
+            shared = len(mine & past) / len(mine)
+            # 直近ほど重く効かせる
+            overlaps.append(shared * (1.0 - position / FRESHNESS_WINDOW))
+        if overlaps:
+            fresh = min(fresh, 1.0 - max(overlaps))
+
     return (
         W_NOVELTY * novelty
         + W_WEIGHT * grown

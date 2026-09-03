@@ -641,6 +641,28 @@ class Store:
         ).fetchall()
         return [r["template_id"] for r in rows]
 
+    def recent_chosen_terms(self, limit: int = 8) -> list[set[str]]:
+        """直近で表に出したアイデアが使った語を、新しい順に返す。
+
+        文型だけを見ていては足りなかった。「いちばんヘビーに使う一人の
+        ためだけに◯◯を作り直す。まず**頻度**が変わるはず」が、材料だけ
+        変えて何度も出ていた。**側面や操作が同じなら、材料が違っても
+        読み手には同じ案に見える。**
+        """
+        rows = self.conn.execute(
+            "SELECT seed_json FROM ideas WHERE verdict = 'chosen' "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        out: list[set[str]] = []
+        for row in rows:
+            try:
+                raw = json.loads(row["seed_json"])
+            except (ValueError, TypeError):
+                continue
+            out.append({term for _, term in raw.get("terms", ())})
+        return out
+
     def recent_scores(self, limit: int = 50) -> list[float]:
         """直近に判定したもののスコア。単発の思いつきを測る物差しに使う。"""
         rows = self.conn.execute(

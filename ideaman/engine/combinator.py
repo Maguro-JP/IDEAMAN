@@ -23,6 +23,9 @@ CANDIDATE_TRIES = 6
 SLOT_KINDS = {
     "aspect": "noun",
     "aspect_q": "clause",
+    # 「{aspect}を{operation_v}」に入れられるのは、自分の目的語を持たない
+    # 動詞だけ。「頻度を主役と脇役を入れ替える」は「を」が二重になる。
+    "operation_v": "verb",
 }
 
 #: テンプレの needs にある名前 -> 引くべきプール名
@@ -30,6 +33,7 @@ SLOT_TO_POOL = {
     "concept_a": "concepts",
     "concept_b": "concepts",
     "operation": "operations",
+    "operation_v": "operations",
     "constraint": "constraints",
     "provocation": "provocations",
     "aspect": "aspects",

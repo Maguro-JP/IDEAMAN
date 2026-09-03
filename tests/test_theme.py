@@ -307,3 +307,53 @@ def test_drop_materials_api(client):
         client.post("/api/themes/999/materials/drop", json={"materials": ["x"]}).status_code
         == 404
     )
+
+
+def test_operations_with_their_own_object_stay_out_of_the_verb_slot():
+    """「頻度を主役と脇役を入れ替える」のような「を」の二重を出さないこと。
+
+    aspects の名詞／疑問節と同じ種類のバグ。プールに文法的な形が混ざって
+    いるのに、スロット側が区別していなかった。テンプレートを足すたびに
+    再発しうるので固定する。
+    """
+    import re
+
+    from ideaman.engine import templates
+    from ideaman.engine.lexicon import default_lexicon
+
+    lexicon = default_lexicon()
+    phrases = [t.term for t in lexicon.pool("operations") if t.kind == "phrase"]
+    assert phrases, "目的語つきの語句が一つも無い（分類が壊れている）"
+
+    for seed in range(400):
+        for materials in (["通知"], []):
+            text = templates.render(combine(materials=materials, seed=seed), lexicon)
+            for phrase in phrases:
+                assert not re.search("を" + re.escape(phrase), text), text
+
+
+def test_recent_terms_are_penalised_so_ideas_do_not_echo(store):
+    """材料だけ変えた同じ案が続けて選ばれないこと。
+
+    「いちばんヘビーに使う一人のためだけに◯◯を作り直す。まず頻度が
+    変わるはず」が、材料だけ変えて何度も出ていた。側面や操作が同じなら、
+    材料が違っても読み手には同じ案に見える。
+    """
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖", "評価", "在庫", "休眠"])
+    for _ in range(200):
+        service.generate_idea(store, use_llm=False)
+
+    chosen = sorted(
+        (i for i in store.search(None, limit=500) if i.verdict == "chosen"),
+        key=lambda i: i.id,
+    )
+    assert len(chosen) > 10
+    overlaps = []
+    for older, newer in zip(chosen, chosen[1:]):
+        a = {t for _, t in store.terms_of(older.id)}
+        b = {t for _, t in store.terms_of(newer.id)}
+        if a and b:
+            overlaps.append(len(a & b) / len(b))
+    mean = sum(overlaps) / len(overlaps)
+    assert mean < 0.35, f"隣り合う案が語を共有しすぎている: {mean:.0%}"

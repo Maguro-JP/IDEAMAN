@@ -21,8 +21,8 @@ templates:
   # --- 具体策 -------------------------------------------------------
   - id: swap_aspect
     tone: proposal
-    needs: [material, aspect, operation, probe]
-    text: "{material}の{aspect}を{operation}。まず{probe}。"
+    needs: [material, aspect, operation_v, probe]
+    text: "{material}の{aspect}を{operation_v}。まず{probe}。"
 
   - id: borrow_from
     tone: proposal
