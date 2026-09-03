@@ -165,3 +165,54 @@ def test_no_doubled_tokoro():
             text = templates.render(combine(seed=i, materials=materials), lexicon)
             assert "ところのところ" not in text, text
             assert "部分のところ" not in text, text
+
+
+# --- 機械的に見つかる文の傷 ----------------------------------------------
+# 語彙を足すたびに再発しうるので、目で見るのではなく検出器で守る。
+# 「直った」を差分で確認すると、条件が変わったとき静かに戻る。
+
+
+#: 材料は**ユーザーの語彙**なので、語彙プールと衝突しうる。
+#: 「通知」は材料にもなり、concepts にも入っている。
+COLLIDING_MATERIALS = ["通知", "語彙", "連鎖", "在庫", "評価", "名前", "待ち時間", "忘却"]
+
+
+def _samples(materials, count=1500):
+    from ideaman.engine import templates
+    from ideaman.engine.lexicon import default_lexicon
+
+    lexicon = default_lexicon()
+    for seed in range(count):
+        idea_seed = combine(materials=materials, seed=seed)
+        yield idea_seed, templates.render(idea_seed, lexicon)
+
+
+def test_a_word_is_never_compared_with_itself():
+    """「通知と通知は、例外の扱いだけ見れば同じではないか」を出さないこと。"""
+    for seed, text in _samples(COLLIDING_MATERIALS):
+        slots = seed.slots
+        material = slots.get("material")
+        if material:
+            assert slots.get("concept_a") != material, text
+            assert slots.get("concept_b") != material, text
+            assert slots.get("aspect") != material, text
+            assert slots.get("aspect_q") != material, text
+        if slots.get("concept_a"):
+            assert slots["concept_a"] != slots.get("concept_b"), text
+
+
+def test_no_mechanical_smells_in_the_text():
+    """助詞の重なりや句点の重複が無いこと。"""
+    for _, text in _samples(COLLIDING_MATERIALS):
+        for smell in ("のの", "をを", "はは", "。。", "、、", "ところのところ"):
+            assert smell not in text, f"{smell}: {text}"
+        assert not text.startswith("。")
+        assert text.endswith("。")
+
+
+def test_the_same_check_holds_without_a_theme():
+    """テーマ未登録のフォールバックでも同じこと。"""
+    for seed, text in _samples([], count=800):
+        assert seed.slots.get("concept_a") != seed.slots.get("concept_b"), text
+        for smell in ("のの", "をを", "。。"):
+            assert smell not in text, text

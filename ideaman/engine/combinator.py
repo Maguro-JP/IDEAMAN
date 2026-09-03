@@ -162,6 +162,17 @@ def _pool_for_slot(
     return _filter_by_domain(pool, domain)
 
 
+def _without(terms: tuple[Term, ...], avoid: set[str]) -> tuple[Term, ...]:
+    """すでに使った語を候補から外す。
+
+    外した結果が空になったら外さない——語が被るより、文が作れないほうが困る。
+    """
+    if not avoid:
+        return terms
+    kept = tuple(t for t in terms if t.term not in avoid)
+    return kept or terms
+
+
 def _filter_by_domain(terms: tuple[Term, ...], domain: str | None) -> tuple[Term, ...]:
     """分野指定があれば、そのタグを持つ語に寄せる。
 
@@ -291,10 +302,24 @@ def combine(
         pending = carried.get(pool_name)
         return pending.pop() if pending else None
 
+    # 材料を先に決める。**材料はユーザーの語彙なので、語彙プールと衝突しうる**
+    # （「通知」は材料にもなり concepts にも入っている）。先に決めておけば、
+    # あとの抽選から除外できる。これをしないと「通知と通知は、例外の扱いだけ
+    # 見れば同じではないか」「待ち時間を作り直すとしたら、待ち時間はどうなるか」
+    # が出る（3000件中32件で実際に出ていた）。
+    if "material" in template.needs:
+        kept = take_carried("materials")
+        chosen = kept or _weighted_choice(
+            rng, tuple(Term(term=m) for m in materials), weights
+        ).term
+        slots["material"] = chosen
+        used.append(("materials", chosen))
+    avoid = {slots["material"]} if "material" in slots else set()
+
     # concepts は「遠い2語」をまとめて引く必要があるので先に処理する。
     concept_slots = [s for s in template.needs if SLOT_TO_POOL.get(s) == "concepts"]
     if concept_slots:
-        pool = _filter_by_domain(lexicon.pool("concepts"), domain)
+        pool = _without(_filter_by_domain(lexicon.pool("concepts"), domain), avoid)
         if len(concept_slots) >= 2:
             # 片方だけ引き継ぐと「同じ題材を別の角度から見る」形になる。
             # 両方引き継ぐと元と同じ組になるので、必ず片方は引き直す。
@@ -322,22 +347,13 @@ def combine(
             slots[concept_slots[0]] = term
             used.append(("concepts", term))
 
-    if "material" in template.needs:
-        # 材料はプールではなくテーマから来る。連想では引き継ぎを優先する。
-        kept = take_carried("materials")
-        chosen = kept or _weighted_choice(
-            rng, tuple(Term(term=m) for m in materials), weights
-        ).term
-        slots["material"] = chosen
-        used.append(("materials", chosen))
-
     for slot in template.needs:
         if slot in slots:
             continue
         pool_name = SLOT_TO_POOL.get(slot)
         if pool_name is None:
             raise ValueError(f"未知のスロット {slot!r} (template={template.id})")
-        pool = _pool_for_slot(lexicon, slot, pool_name, domain)
+        pool = _without(_pool_for_slot(lexicon, slot, pool_name, domain), avoid)
         kept = take_carried(pool_name)
         if kept is not None and kept not in {t.term for t in pool}:
             # 引き継いだ語がこのスロットの形に合わない（名詞句のスロットに
