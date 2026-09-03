@@ -537,3 +537,35 @@ def test_symlinks_are_not_followed(tmp_path):
     terms = [c.term for c in harvest(allowed, min_files=1, include_git=False)]
     assert "配送" in terms
     assert "忍者" not in terms
+
+
+def test_dropping_a_material_also_clears_it_from_the_stock(tmp_path):
+    """外した語を含む在庫は、そのあと出てこないこと。
+
+    `doctor` は「残しておくと、これを含む案が出続けます」と言って外させる。
+    ところが在庫はそのまま残っていたので、外したあとも出続けていた
+    （実測で 60 件中 5 件が在庫に残り、実際に出てきた）。
+    """
+    from ideaman import service
+    from ideaman.store import Store
+
+    store = Store(tmp_path / "drop.db")
+    try:
+        theme = store.add_theme("t")
+        store.add_materials(theme.id, ["通知", "語彙", "場合", "連鎖", "在庫"])
+        for _ in range(60):
+            service.generate_idea(store, use_llm=False)
+
+        total_before = store.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()[0]
+        store.drop_materials(theme.id, ["場合"])
+
+        stock = store.conn.execute(
+            "SELECT text FROM ideas WHERE state = 'unseen' AND verdict = 'chosen'"
+        ).fetchall()
+        assert not [row["text"] for row in stock if "場合" in row["text"]]
+        # 蓄積は捨てない。出す対象から外すだけ。
+        assert store.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()[0] == (
+            total_before
+        )
+    finally:
+        store.close()

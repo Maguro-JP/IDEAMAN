@@ -440,9 +440,30 @@ class Store:
                 "DELETE FROM theme_terms WHERE theme_id = ? AND term = ?",
                 (theme_id, term),
             )
-            dropped += cur.rowcount or 0
+            if cur.rowcount:
+                dropped += cur.rowcount
+                self._forget_stock_with(theme_id, term)
         self.conn.commit()
         return dropped
+
+    def _forget_stock_with(self, theme_id: int, term: str) -> int:
+        """その語を含む在庫を、出す対象から外す。
+
+        材料を外しても在庫は残るので、外したはずの語がそのあとも出続ける。
+        `doctor` は「残しておくと、これを含む案が出続けます」と言って外させる
+        のだから、外したらそこで途切れないと嘘になる。
+
+        **消しはしない。** 連鎖の子が親を指しているので消すと壊れるし、
+        蓄積は捨てない方針でもある。`chosen` を `kept` に落とすだけ——
+        出す対象から外れて、記録には残る。見せたものには触らない。
+        """
+        cur = self.conn.execute(
+            "UPDATE ideas SET verdict = 'kept' "
+            "WHERE state = 'unseen' AND verdict = 'chosen' "
+            "AND theme_id = ? AND text LIKE ?",
+            (theme_id, f"%{term}%"),
+        )
+        return cur.rowcount or 0
 
     def materials(self, theme_id: int) -> list[str]:
         rows = self.conn.execute(
