@@ -8,7 +8,7 @@
 それで間違えた。
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -18,7 +18,7 @@ from ideaman.notify import QueueNotifier
 from ideaman.store import Store
 from ideaman.worker import Worker, parse_schedule
 
-START = datetime(2026, 9, 1, tzinfo=timezone.utc)
+START = datetime(2026, 9, 1, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -105,4 +105,4 @@ def test_the_clock_can_be_put_back(tmp_path):
     state = {"now": START}
     store_module.set_clock(lambda: state["now"])
     store_module.set_clock(None)
-    assert (store_module.utcnow() - datetime.now(timezone.utc)).total_seconds() < 5
+    assert (store_module.utcnow() - datetime.now(UTC)).total_seconds() < 5

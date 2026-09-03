@@ -6,7 +6,7 @@
 なるので、診断が要る。
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -68,7 +68,7 @@ def test_an_idle_worker_is_reported(store):
     store.add_materials(theme.id, ["通知", "語彙", "連鎖", "在庫"])
     service.generate_idea(store, use_llm=False)
 
-    old = (datetime.now(timezone.utc) - timedelta(hours=9)).isoformat()
+    old = (datetime.now(UTC) - timedelta(hours=9)).isoformat()
     store.conn.execute("UPDATE ideas SET created_at = ?", (old,))
     store.conn.commit()
 

@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 ASSOCIATE = "associate"
 WANDER = "wander"
@@ -214,7 +214,7 @@ def dormancy_for(stall_count: int, *, now: datetime | None = None) -> datetime:
     同じ語で何度も行き詰まるほど長く寝かせる。ただし上限があり、
     永久に消えることはない。
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     # 指数を先に頭打ちにする。stall_count は際限なく増えるので、
     # 掛けてから min を取ると timedelta が溢れる。
     doublings = min(max(stall_count, 0), 16)
@@ -236,7 +236,7 @@ def draw_weight(
     Returns:
         0.0 なら抽選から外れる。
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     if dormant_until is None:
         return weight

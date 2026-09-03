@@ -90,43 +90,14 @@ _CAMEL = re.compile(r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]+|[a-z0-9]+")
 
 #: どのプロジェクトにも出てくる語。材料としての情報量がない。
 STOPWORDS = frozenset(
-    """
-    self cls this true false null none void int str bool float list dict set
-    tuple map array object string number boolean type types kind value values
-    key keys item items data result results return returns args kwargs params
-    param arg option options config configs setting settings env var let const
-    function func def class new delete import export from require module
-    default async await yield lambda print log logger debug info warn warning
-    error errors exception raise throw catch try except finally assert test
-    tests testing spec mock fixture setup teardown init main run start stop
-    get set add remove update create delete find search filter sort list all
-    any not and or if else elif for while break continue pass with as in is
-    name names id ids index idx count total sum max min len size length
-    path paths file files dir directory folder root base src lib util utils
-    helper helpers common core api http url uri request response req res
-    server client app application service handler view model schema table
-    column row query db database sql select insert where order group limit
-    text content body html css div span class style script link href
-    time date datetime now today year month day hour minute second timestamp
-    version build release deploy docker node npm pip python javascript
-    todo fixme note warning copyright license readme
-    テスト データ ファイル ディレクトリ リスト エラー コード システム
-    サーバー クライアント メソッド クラス オブジェクト パラメータ
-    デフォルト オプション インストール バージョン アップデート
-    """.split()
+    ["self", "cls", "this", "true", "false", "null", "none", "void", "int", "str", "bool", "float", "list", "dict", "set", "tuple", "map", "array", "object", "string", "number", "boolean", "type", "types", "kind", "value", "values", "key", "keys", "item", "items", "data", "result", "results", "return", "returns", "args", "kwargs", "params", "param", "arg", "option", "options", "config", "configs", "setting", "settings", "env", "var", "let", "const", "function", "func", "def", "class", "new", "delete", "import", "export", "from", "require", "module", "default", "async", "await", "yield", "lambda", "print", "log", "logger", "debug", "info", "warn", "warning", "error", "errors", "exception", "raise", "throw", "catch", "try", "except", "finally", "assert", "test", "tests", "testing", "spec", "mock", "fixture", "setup", "teardown", "init", "main", "run", "start", "stop", "get", "set", "add", "remove", "update", "create", "delete", "find", "search", "filter", "sort", "list", "all", "any", "not", "and", "or", "if", "else", "elif", "for", "while", "break", "continue", "pass", "with", "as", "in", "is", "name", "names", "id", "ids", "index", "idx", "count", "total", "sum", "max", "min", "len", "size", "length", "path", "paths", "file", "files", "dir", "directory", "folder", "root", "base", "src", "lib", "util", "utils", "helper", "helpers", "common", "core", "api", "http", "url", "uri", "request", "response", "req", "res", "server", "client", "app", "application", "service", "handler", "view", "model", "schema", "table", "column", "row", "query", "db", "database", "sql", "select", "insert", "where", "order", "group", "limit", "text", "content", "body", "html", "css", "div", "span", "class", "style", "script", "link", "href", "time", "date", "datetime", "now", "today", "year", "month", "day", "hour", "minute", "second", "timestamp", "version", "build", "release", "deploy", "docker", "node", "npm", "pip", "python", "javascript", "todo", "fixme", "note", "warning", "copyright", "license", "readme", "テスト", "データ", "ファイル", "ディレクトリ", "リスト", "エラー", "コード", "システム", "サーバー", "クライアント", "メソッド", "クラス", "オブジェクト", "パラメータ", "デフォルト", "オプション", "インストール", "バージョン", "アップデート"]
 )
 
 #: 日本語のコメントに必ず出る機能語。中身のある語のように見えて、材料に
 #: すると「場合の待ち時間を反転させる」のような無意味な文になる。
 #: （ひらがなだけの語は抽出側で弾いているのでここには要らない）
 STOPWORDS = STOPWORDS | frozenset(
-    """
-    場合 処理 実行 必要 使用 指定 取得 設定 引数 戻り値 以下 以上 未満
-    対象 方法 内容 情報 確認 追加 削除 変更 修正 作成 生成 利用 出力
-    入力 参照 定義 説明 注意 一覧 全体 自分 今回 現在 上記 時間 数値
-    文字 文字列 関数 変数 定数 属性 要素 単純 簡単 複雑 以外 同様 一部
-    実際 直近 汎用 既定 本来 従来 以前 当該 該当 上述 前提 通常 特定 任意
-    """.split()
+    ["場合", "処理", "実行", "必要", "使用", "指定", "取得", "設定", "引数", "戻り値", "以下", "以上", "未満", "対象", "方法", "内容", "情報", "確認", "追加", "削除", "変更", "修正", "作成", "生成", "利用", "出力", "入力", "参照", "定義", "説明", "注意", "一覧", "全体", "自分", "今回", "現在", "上記", "時間", "数値", "文字", "文字列", "関数", "変数", "定数", "属性", "要素", "単純", "簡単", "複雑", "以外", "同様", "一部", "実際", "直近", "汎用", "既定", "本来", "従来", "以前", "当該", "該当", "上述", "前提", "通常", "特定", "任意"]
 )
 
 
@@ -146,7 +117,7 @@ class Candidate:
 
 
 def initial_weights(
-    candidates: "list[Candidate]", low: float = 0.7, high: float = 1.6
+    candidates: list[Candidate], low: float = 0.7, high: float = 1.6
 ) -> dict[str, float]:
     """候補の点数を、抽選の初期重みに変換する。
 

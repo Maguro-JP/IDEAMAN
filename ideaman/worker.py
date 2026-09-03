@@ -12,7 +12,8 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, time as dtime, timedelta
+from datetime import datetime, timedelta
+from datetime import time as dtime
 
 from . import service
 from .notify import Notifier, deliver_all
@@ -132,6 +133,6 @@ class Worker:
         while True:
             try:
                 self.tick()
-            except Exception:  # noqa: BLE001 - 一度の失敗で思考を止めない
+            except Exception:
                 log.exception("tick に失敗した。次の周回で続ける")
             time.sleep(tick_seconds)

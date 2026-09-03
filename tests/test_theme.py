@@ -125,9 +125,6 @@ def _clause_terms():
 
 def test_clause_aspects_never_land_in_a_noun_slot():
     """疑問節は「〜を{操作}」の位置に来てはいけない。"""
-    from ideaman.engine.lexicon import default_lexicon
-
-    lexicon = default_lexicon()
     clauses = _clause_terms()
     assert clauses, "疑問節の語が一つも無い（分類が壊れている）"
 
@@ -383,9 +380,8 @@ def test_every_pool_is_reachable_with_and_without_a_theme():
     死んでいた（テンプレートから operation が消えたため）。語彙を増やしても
     引かれなければ意味がないので、両方の経路で確かめる。
     """
-    from ideaman.engine.lexicon import POOL_NAMES, default_lexicon
+    from ideaman.engine.lexicon import POOL_NAMES
 
-    lexicon = default_lexicon()
     for materials in (["通知"], []):
         used = set()
         for seed in range(600):

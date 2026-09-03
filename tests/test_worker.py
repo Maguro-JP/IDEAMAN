@@ -4,13 +4,13 @@
 Discord が無くてもここは全部検証できる。
 """
 
-from datetime import datetime, time as dtime, timedelta
+from datetime import datetime, timedelta
+from datetime import time as dtime
 
 import pytest
 
-from ideaman.notify import Notifier, QueueNotifier, deliver_all
+from ideaman.notify import QueueNotifier, deliver_all
 from ideaman.worker import Worker, due_now, parse_schedule
-
 
 # --- スケジュール ----------------------------------------------------
 
@@ -160,7 +160,7 @@ def test_the_worker_does_not_queue_on_every_tick(store, monkeypatch):
     動いていないと永久に「まだ配っていない」になり、**3日で864件**積んで
     いた。復帰した瞬間に全部流れる——「ずっとアイデアが溢れてくる Bot」。
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     import ideaman.store as store_module
     from ideaman import service

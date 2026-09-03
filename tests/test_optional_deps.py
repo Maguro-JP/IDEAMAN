@@ -10,7 +10,7 @@ import pytest
 
 def test_modules_import_without_their_dependencies():
     """import が通ること。ここで落ちるとテスト収集ごと巻き添えになる。"""
-    import ideaman.bots.discord_bot  # noqa: F401
+    import ideaman.bots.discord_bot
     import ideaman.mcp_server  # noqa: F401
 
 

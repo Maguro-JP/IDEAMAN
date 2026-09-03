@@ -4,7 +4,7 @@
 戻ってくる」が起きているか。
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -13,7 +13,7 @@ from ideaman.engine import rhythm
 from ideaman.engine.combinator import combine
 from ideaman.store import Store
 
-NOW = datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
 
 
 # --- モードの切り替え ------------------------------------------------

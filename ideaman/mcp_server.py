@@ -262,7 +262,6 @@ def build_server(store: Store):
             from pathlib import Path
 
             from .harvest import harvest as run_harvest
-
             from .harvest import initial_weights
 
             try:

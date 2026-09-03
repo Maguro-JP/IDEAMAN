@@ -78,6 +78,6 @@ def refine(seed: IdeaSeed, text: str) -> tuple[str, str]:
         if not refined:
             return text, "engine"
         return refined, "llm"
-    except Exception:  # noqa: BLE001 - 仕上げは失敗しても生成を止めない
+    except Exception:
         log.warning("refiner: 仕上げに失敗したためテンプレート出力を使います", exc_info=True)
         return text, "engine"

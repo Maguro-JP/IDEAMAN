@@ -481,6 +481,10 @@ LLM は**オプション**であって前提ではない。
 .venv/bin/pytest
 ```
 
+```bash
+.venv/bin/ruff check ideaman tests
+```
+
 テストは外部 API を叩かない（`conftest.py` がキーを外す）。
 
 Discord Bot と MCP サーバーも、外部に繋がずに**中身まで通す**。Bot は偽の

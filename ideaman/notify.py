@@ -62,5 +62,5 @@ def deliver_all(notifiers: list[Notifier], idea: Idea) -> None:
     for notifier in notifiers:
         try:
             notifier.deliver(idea)
-        except Exception:  # noqa: BLE001 - 配信の失敗で思考を止めない
+        except Exception:
             log.exception("%s への配信に失敗した", getattr(notifier, "name", "?"))

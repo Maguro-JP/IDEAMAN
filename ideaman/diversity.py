@@ -39,12 +39,12 @@ class Health:
         lines = [
             f"アイデア          {self.total} 件 / 連鎖 {self.chains} 本",
             f"連鎖の長さ        平均 {self.mean_chain_length:.1f} / 最長 {self.longest_chain}",
-            f"  分布            "
+            "  分布            "
             + ", ".join(
                 f"{length}→{count}本"
                 for length, count in sorted(self.chain_lengths.items())
             ),
-            f"モード            "
+            "モード            "
             + ", ".join(f"{mode} {n}" for mode, n in self.mode_counts.most_common()),
             f"語の被覆率        {self.coverage:.0%}（語彙のうち実際に使われた割合）",
             f"上位集中度        {self.top_share:.0%}（最頻出5語が占める割合）",

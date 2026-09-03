@@ -87,7 +87,7 @@ def test_a_lone_thought_must_clear_the_bar(store):
 
     weak = _chain(store, ["弱い思いつき"])
     monkey = curator.score
-    curator.score = lambda s, i: 0.1  # noqa: E731
+    curator.score = lambda s, i: 0.1
     try:
         assert curator.curate(store, weak, use_llm=False) == []
         assert store.get(weak[0].id).verdict == "kept"
@@ -102,7 +102,7 @@ def test_a_strong_lone_thought_gets_through(store):
 
     strong = _chain(store, ["強い思いつき"])
     monkey = curator.score
-    curator.score = lambda s, i: 0.9  # noqa: E731
+    curator.score = lambda s, i: 0.9
     try:
         assert len(curator.curate(store, strong, use_llm=False)) == 1
     finally:
@@ -134,7 +134,7 @@ def test_developed_ideas_score_higher_than_bare_ones(store):
     bare, developed = chain[0], chain[1]
     # 語の違いを消して、親の有無だけを比べる
     monkey = store.novelty_of
-    store.novelty_of = lambda _id: 0.5  # noqa: E731
+    store.novelty_of = lambda _id: 0.5
     try:
         assert curator.score(store, developed) > curator.score(store, bare)
     finally:

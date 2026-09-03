@@ -57,7 +57,7 @@ async def _attach_chain(store: Store, message, idea) -> None:
         if len(rest) > MAX_THREAD_LINES:
             body += f"\n（ほか {len(rest) - MAX_THREAD_LINES} 件）"
         await thread.send(body)
-    except Exception:  # noqa: BLE001 - スレッドが作れなくても本体は届いている
+    except Exception:
         log.warning("スレッドを作れなかった: idea=%s", idea.id, exc_info=True)
 
 
@@ -91,7 +91,7 @@ def build_bot(store: Store, channel_id: int):
                 await _attach_chain(store, message, idea)
                 store.mark_delivered(delivery_id, str(message.id))
                 log.info("投稿した: idea=%s message=%s", idea.id, message.id)
-            except Exception:  # noqa: BLE001 - 1件の失敗で残りを止めない
+            except Exception:
                 log.exception("投稿に失敗した: idea=%s", idea.id)
                 store.mark_delivered(delivery_id, None, failed=True)
 
@@ -106,7 +106,7 @@ def build_bot(store: Store, channel_id: int):
             drain_queue.start()
         try:
             await bot.tree.sync()
-        except Exception:  # noqa: BLE001 - コマンド同期の失敗で落とさない
+        except Exception:
             log.exception("スラッシュコマンドの同期に失敗した")
 
     @bot.event

@@ -13,8 +13,8 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from ideaman import service  # noqa: E402
-from ideaman.mcp_server import build_server  # noqa: E402
+from ideaman import service
+from ideaman.mcp_server import build_server
 
 
 def call(_server, _tool, **arguments):

@@ -14,7 +14,7 @@ DB が揮発する場所にあれば毎回記憶を失い、材料に的外れ�
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .harvest import STOPWORDS
@@ -176,8 +176,8 @@ def _check_thinking(store: Store) -> list[Finding]:
 
     when = datetime.fromisoformat(last)
     if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    idle = datetime.now(timezone.utc) - when
+        when = when.replace(tzinfo=UTC)
+    idle = datetime.now(UTC) - when
 
     if idle > STALE_AFTER:
         out.append(
@@ -190,7 +190,8 @@ def _check_thinking(store: Store) -> list[Finding]:
             )
         )
     else:
-        out.append(Finding("ok", "思考", f"最後に考えたのは {int(idle.total_seconds() // 60)} 分前"))
+        minutes = int(idle.total_seconds() // 60)
+        out.append(Finding("ok", "思考", f"最後に考えたのは {minutes} 分前"))
 
     if stock == 0:
         out.append(

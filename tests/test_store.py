@@ -311,7 +311,7 @@ def test_threads_can_write_at_the_same_time(store):
         try:
             for _ in range(15):
                 service.generate_idea(store, use_llm=False)
-        except BaseException as exc:  # noqa: BLE001 - 何が出ても記録する
+        except BaseException as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=churn) for _ in range(3)]

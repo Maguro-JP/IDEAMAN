@@ -61,22 +61,22 @@ def score(store: Store, idea: Idea) -> float:
 
     weights = store.weights()
     terms = store.terms_of(idea.id)
-    if terms:
-        mean = sum(weights.get(term, 1.0) for _, term in terms) / len(terms)
-    else:
-        mean = 1.0
+    mean = (
+        sum(weights.get(term, 1.0) for _, term in terms) / len(terms) if terms else 1.0
+    )
     # 1.0 を基準に 0〜1 へ。育っていない語ばかりなら 0 付近になる。
     grown = min(max((mean - 1.0) / (WEIGHT_CEILING - 1.0), 0.0), 1.0)
 
     developed = 1.0 if idea.parent_id is not None else 0.0
 
     # 直近に使った文型ほど減点。すぐ前に使ったものが最も重い。
+    # 0 件前（直前）なら 0.0、窓の端なら 1.0 に近づく。
     recent = store.recent_chosen_templates(FRESHNESS_WINDOW)
-    if idea.template_id in recent:
-        # 0 件前（直前）なら 0.0、窓の端なら 1.0 に近づく。
-        fresh = recent.index(idea.template_id) / len(recent)
-    else:
-        fresh = 1.0
+    fresh = (
+        recent.index(idea.template_id) / len(recent)
+        if idea.template_id in recent
+        else 1.0
+    )
 
     # 文型だけでは足りない。「いちばんヘビーに使う一人のためだけに◯◯を
     # 作り直す。まず**頻度**が変わるはず」が、材料だけ変えて何度も出ていた。
@@ -152,7 +152,7 @@ def _llm_pick(chain: list[Idea], want: int) -> list[int] | None:
             if chunk.isdigit() and 1 <= int(chunk) <= len(chain):
                 picked.append(chain[int(chunk) - 1].id)
         return picked[:want] or None
-    except Exception:  # noqa: BLE001 - 選別の失敗で思考を止めない
+    except Exception:
         log.warning("LLM による選別に失敗したので指標で選ぶ", exc_info=True)
         return None
 

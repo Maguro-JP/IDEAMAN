@@ -20,7 +20,7 @@ llm = ["anthropic>=0.40"]
 bot = ["discord.py>=2.3"]
 # 2.x で FastMCP が MCPServer に変わったため 1.x では動かない
 mcp = ["mcp>=2.0"]
-dev = ["pytest>=8.0", "httpx>=0.27"]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
 
 [project.scripts]
 ideaman = "ideaman.cli:main"
@@ -30,6 +30,24 @@ include = ["ideaman*"]
 
 [tool.setuptools.package-data]
 ideaman = ["data/*.yaml", "static/*.html", "*.sql"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    # 日本語のコメントに全角の括弧や「〜」が出るのは意図どおり。
+    "RUF001", "RUF002", "RUF003",
+    # FastAPI の Depends(...) は既定引数で呼ぶのが作法。
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# テストは読みやすさ優先。zip の strict や未使用の展開は目をつぶる。
+"tests/*" = ["B905", "RUF007", "RUF059", "B007"]
+# 止め語の塊は1語1行にすると読めない。長い行のまま置く。
+"ideaman/harvest.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

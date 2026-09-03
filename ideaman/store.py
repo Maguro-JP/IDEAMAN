@@ -5,6 +5,7 @@ ORM は使わない。テーブルは3つしかなく、SQL のほうが何が�
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -12,7 +13,7 @@ import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .engine import rhythm
@@ -147,19 +148,23 @@ class Idea:
 #: あちこちに散っていて長期挙動を検証できなかった（休眠が明けるか、
 #: 語彙が枯れないか）。書き込みと読み取りの時刻がずれると測定にならない
 #: ので、入口を1つにしてある。
-_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
+def _real_clock() -> datetime:
+    return datetime.now(UTC)
+
+
+_clock: Callable[[], datetime] = _real_clock
 
 
 def set_clock(clock: Callable[[], datetime] | None) -> None:
     """時計を差し替える。`None` で実時刻に戻す。テストと長期検証のため。"""
     global _clock
-    _clock = clock or (lambda: datetime.now(timezone.utc))
+    _clock = clock or _real_clock
 
 
 def utcnow() -> datetime:
     """いまの時刻（tz 付き）。引数名 `now` と紛れないよう別名にしてある。"""
     moment = _clock()
-    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 def _now() -> str:
@@ -296,10 +301,9 @@ class Store:
         with self._lock:
             connections, self._connections = self._connections, []
         for conn in connections:
-            try:
+            # すでに閉じている / 使用中でも、閉じられないだけなので進む。
+            with contextlib.suppress(sqlite3.Error):
                 conn.close()
-            except sqlite3.Error:  # すでに閉じている / 使用中
-                pass
         self._local = threading.local()
 
     # --- 重み ---------------------------------------------------------
@@ -542,7 +546,9 @@ class Store:
             chain_id=row["chain_id"],
             chain_length=row["chain_length"],
             stale_hits=row["stale_hits"],
-            mood=row["mood"] if "mood" in row.keys() else "",
+            # `in row` は**列名ではなく値**を見る（sqlite3.Row の仕様）。
+            # `.keys()` を外すと、古い DB の判定が静かに壊れる。
+            mood=row["mood"] if "mood" in row.keys() else "",  # noqa: SIM118
         )
 
     def save_thought_state(self, state: rhythm.ThoughtState) -> None:
