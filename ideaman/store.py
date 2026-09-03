@@ -357,8 +357,15 @@ class Store:
         )
 
     def reinforce(self, terms: Iterable[tuple[str, str]], factor: float) -> None:
-        """語の重みをまとめて動かす。重複を信号として拾うときに使う。"""
+        """語の重みをまとめて動かす。重複を信号として拾うときに使う。
+
+        言い方の部分（`SIGNATURE_IGNORED_POOLS`）は動かさない。同じ場所に
+        戻ってきたという信号は発想についてのものであって、締めの一文が
+        良かったという意味ではない。
+        """
         for pool, term in terms:
+            if pool in IdeaSeed.SIGNATURE_IGNORED_POOLS:
+                continue
             self._bump(pool, term, factor)
         self.conn.commit()
 
@@ -1015,6 +1022,9 @@ class Store:
         if score != 0:
             factor = UPVOTE_FACTOR if score > 0 else DOWNVOTE_FACTOR
             for pool, term in json.loads(row["seed_json"])["terms"]:
+                # 言い方の部分は評価で動かさない（`SIGNATURE_IGNORED_POOLS`）。
+                if pool in IdeaSeed.SIGNATURE_IGNORED_POOLS:
+                    continue
                 self._bump(pool, term, factor)
 
         self.conn.commit()

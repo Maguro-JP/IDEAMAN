@@ -55,12 +55,21 @@ def test_ready_comes_out_best_first(store):
     assert store.take_ready() is None
 
 
+def _idea_terms(idea_seed):
+    """発想を担う語だけ。言い方（probes）は評価で動かさない。"""
+    return [
+        (pool, term)
+        for pool, term in idea_seed.terms
+        if pool not in idea_seed.SIGNATURE_IGNORED_POOLS
+    ]
+
+
 def test_upvote_raises_weights_of_its_terms(store):
     idea_seed, idea = _save(store)
     store.rate(idea.id, 1)
 
     weights = store.weights()
-    for _, term in idea_seed.terms:
+    for _, term in _idea_terms(idea_seed):
         assert weights[term] > 1.0
 
 
@@ -69,8 +78,32 @@ def test_downvote_lowers_weights(store):
     store.rate(idea.id, -1)
 
     weights = store.weights()
-    for _, term in idea_seed.terms:
+    for _, term in _idea_terms(idea_seed):
         assert weights[term] < 1.0
+
+
+def test_rating_does_not_move_the_phrasing(store):
+    """締めの一文（probes）は評価で動かさないこと。
+
+    「まず15分だけ試す」は言い方であって思いつきではない。👍 をこれの
+    手柄にすると、当たった発想の道連れで太る。しかも probes は署名から
+    外してあるので反復抑制にも見えず、止めるものが無い。稼働中の DB で
+    重みが 4.64（他は約1.0、上限5.0）まで走り、選ばれた案の probe の
+    49% が同じ一文になっていた。
+    """
+    idea_seed, idea = _save(store)
+    phrasing = [
+        term
+        for pool, term in idea_seed.terms
+        if pool in idea_seed.SIGNATURE_IGNORED_POOLS
+    ]
+    if not phrasing:  # そのテンプレートが probe を使っていない
+        return
+
+    store.rate(idea.id, 1)
+    weights = store.weights()
+    for term in phrasing:
+        assert weights.get(term, 1.0) == 1.0
 
 
 def test_neutral_rating_leaves_weights_alone(store):
