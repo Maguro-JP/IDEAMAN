@@ -278,6 +278,8 @@ class Store:
             "weights": [
                 ("dormant_until", "TEXT"),
                 ("stall_count", "INTEGER NOT NULL DEFAULT 0"),
+                # 何本目の連鎖で眠ったか。時間ではなく思考量で明けるため。
+                ("slept_at_chain", "INTEGER"),
             ],
             "thought_state": [
                 ("mood", "TEXT NOT NULL DEFAULT ''"),
@@ -321,8 +323,10 @@ class Store:
         ここは DB から読んで渡すだけ。
         """
         rows = self.conn.execute(
-            "SELECT term, weight, dormant_until FROM weights"
+            "SELECT term, weight, dormant_until, stall_count, slept_at_chain "
+            "FROM weights"
         ).fetchall()
+        chains = self.chains_so_far()
         out: dict[str, float] = {}
         for row in rows:
             dormant = (
@@ -330,7 +334,14 @@ class Store:
                 if row["dormant_until"]
                 else None
             )
-            out[row["term"]] = rhythm.draw_weight(row["weight"], dormant, now=now)
+            slept = row["slept_at_chain"]
+            out[row["term"]] = rhythm.draw_weight(
+                row["weight"],
+                dormant,
+                stall_count=row["stall_count"] or 0,
+                chains_since=None if slept is None else chains - slept,
+                now=now,
+            )
         return out
 
     def _bump(self, pool: str, term: str, factor: float) -> None:
@@ -502,6 +513,7 @@ class Store:
         時間が来れば戻ってくる（頭の片隅に置いておく）。
         """
         now = now or utcnow()
+        chains = self.chains_so_far()
         for pool, term in terms:
             row = self.conn.execute(
                 "SELECT weight, stall_count FROM weights WHERE pool = ? AND term = ?",
@@ -511,28 +523,49 @@ class Store:
             stalls = (row["stall_count"] if row else 0) + 1
             until = rhythm.dormancy_for(stalls, now=now)
             self.conn.execute(
-                "INSERT INTO weights (pool, term, weight, dormant_until, stall_count) "
-                "VALUES (?, ?, ?, ?, ?) "
+                "INSERT INTO weights "
+                "(pool, term, weight, dormant_until, stall_count, slept_at_chain) "
+                "VALUES (?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT (pool, term) DO UPDATE SET "
                 "dormant_until = excluded.dormant_until, "
-                "stall_count = excluded.stall_count",
-                (pool, term, weight, until.isoformat(), stalls),
+                "stall_count = excluded.stall_count, "
+                "slept_at_chain = excluded.slept_at_chain",
+                (pool, term, weight, until.isoformat(), stalls, chains),
             )
         self.conn.commit()
+
+    def chains_so_far(self) -> int:
+        """これまでに始まった連鎖の本数。
+
+        休眠を**時間ではなく思考量で**明けるための物差し。連鎖 id は
+        単調に増えるので、そのまま数えればよい。
+        """
+        row = self.conn.execute("SELECT MAX(chain_id) FROM ideas").fetchone()
+        return row[0] or 0
 
     def dormant_terms(self, now: datetime | None = None) -> list[str]:
         """いま眠っている語（aspiration で通るものは除く）。"""
         now = now or utcnow()
+        chains = self.chains_so_far()
         rows = self.conn.execute(
-            "SELECT term, weight, dormant_until FROM weights "
-            "WHERE dormant_until IS NOT NULL AND dormant_until > ?",
+            "SELECT term, weight, dormant_until, stall_count, slept_at_chain "
+            "FROM weights WHERE dormant_until IS NOT NULL AND dormant_until > ?",
             (now.isoformat(),),
         ).fetchall()
-        return [
-            row["term"]
-            for row in rows
-            if row["weight"] < rhythm.ASPIRATION_WEIGHT
-        ]
+        asleep = []
+        for row in rows:
+            if row["weight"] >= rhythm.ASPIRATION_WEIGHT:
+                continue
+            slept = row["slept_at_chain"]
+            since = None if slept is None else chains - slept
+            if not rhythm.is_awake(
+                datetime.fromisoformat(row["dormant_until"]),
+                row["stall_count"] or 0,
+                since,
+                now=now,
+            ):
+                asleep.append(row["term"])
+        return asleep
 
     # --- 思考の状態 ---------------------------------------------------
 

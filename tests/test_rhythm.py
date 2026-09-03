@@ -292,3 +292,49 @@ def test_a_chain_keeps_one_mood(store):
     steps = sum(len(v) - 1 for v in long)
     flips = sum(sum(1 for a, b in zip(v, v[1:]) if a.mood != b.mood) for v in long)
     assert flips / steps < 0.35, f"連鎖の中で気分が変わりすぎ: {flips / steps:.0%}"
+
+
+def test_thinking_hard_does_not_put_the_whole_vocabulary_to_sleep(tmp_path):
+    """回し続けても、引ける語が残っていること。
+
+    休眠を時間だけで測っていたときは、150 件生成した時点で**材料が
+    10語中10語とも眠っていた**。「あなたの材料 × 遠い概念」がこの
+    システムの有益さなので、材料が全部眠るのは考えていないのと同じ。
+    実際に動かして初めて出た（ワーカーは在庫を埋めるために数分で
+    何十本も連鎖を終わらせる）。
+    """
+    from ideaman import service
+    from ideaman.store import Store
+
+    store = Store(tmp_path / "sleep.db")
+    try:
+        theme = store.add_theme("t")
+        materials = ["通知", "語彙", "連鎖", "在庫", "休眠", "評価", "材料", "配信"]
+        store.add_materials(theme.id, materials)
+        for _ in range(200):
+            service.generate_idea(store, use_llm=False)
+
+        drawable = store.draw_weights()
+        awake = [t for t in materials if drawable.get(t, 1.0) > 0.0]
+        assert len(awake) >= len(materials) // 2, f"材料が眠りすぎ: {awake}"
+    finally:
+        store.close()
+
+
+def test_dormancy_ends_by_time_even_without_further_thinking():
+    """考えていないあいだは、時計のほうで明けること。
+
+    連鎖の本数だけで測ると、ゆっくり使う人の語は戻ってこない。
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from ideaman.engine import rhythm
+
+    slept = datetime(2026, 1, 1, tzinfo=UTC)
+    until = rhythm.dormancy_for(0, now=slept)
+    assert not rhythm.is_awake(until, 0, 0, now=slept + timedelta(minutes=1))
+    assert rhythm.is_awake(until, 0, 0, now=until + timedelta(seconds=1))
+    # 時計はまだでも、ほかの連鎖を十分に挟めば戻る。
+    assert rhythm.is_awake(
+        until, 0, rhythm.DORMANCY_CHAINS, now=slept + timedelta(minutes=1)
+    )

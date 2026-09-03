@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS weights (
     weight        REAL NOT NULL DEFAULT 1.0,
     dormant_until TEXT,
     stall_count   INTEGER NOT NULL DEFAULT 0,
+    -- 何本目の連鎖で眠ったか。休眠は時間だけでなく、そのあとに
+    -- どれだけ考えたかでも明ける（回し続けると全部眠ってしまう）。
+    slept_at_chain INTEGER,
     PRIMARY KEY (pool, term)
 );
 

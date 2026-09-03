@@ -208,6 +208,28 @@ def leave_chain(state: ThoughtState) -> ThoughtState:
     return ThoughtState(mode=WANDER, chain_id=None, chain_length=0, stale_hits=0)
 
 
+#: 休眠が明けるまでに、ほかに何本の連鎖を挟めばよいか。
+#: **時間だけで休眠を測ってはいけない。** 6時間というのは「1日に数回
+#: 思いつく人」の尺度で、ワーカーが在庫を埋めるあいだは数分で何十本も
+#: 連鎖が終わる。実測では 150 件生成した時点で**材料が10語中10語とも
+#: 眠っていた**——材料はこのシステムの有益さそのものなので、これは
+#: 「別のことを考えている」ではなく「考える材料が無い」状態だった。
+#: incubation が言っているのは間を空けることであって、時計ではない。
+DORMANCY_CHAINS = 3
+
+#: 連鎖で測るほうの上限。時間側の MAX_DORMANCY に対応する。
+MAX_DORMANCY_CHAINS = 48
+
+
+def dormancy_chains_for(stall_count: int) -> int:
+    """休眠を明けるのに必要な連鎖の本数。
+
+    時間と同じく、行き詰まりを重ねた語ほど長く寝かせる。
+    """
+    doublings = min(max(stall_count, 0), 8)
+    return min(DORMANCY_CHAINS * (2**doublings), MAX_DORMANCY_CHAINS)
+
+
 def dormancy_for(stall_count: int, *, now: datetime | None = None) -> datetime:
     """休眠がいつ明けるか。
 
@@ -222,10 +244,35 @@ def dormancy_for(stall_count: int, *, now: datetime | None = None) -> datetime:
     return now + span
 
 
+def is_awake(
+    dormant_until: datetime | None,
+    stall_count: int,
+    chains_since: int | None,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """その語がもう起きているか。
+
+    **時間か、思考量か、どちらかが足りていれば起きる。** 止まっている
+    あいだは時計が、回っているあいだは連鎖の本数が効く。片方だけで
+    測ると、ゆっくり使う人には戻ってこず、回し続ける人には全部眠る。
+    """
+    if dormant_until is None:
+        return True
+    now = now or datetime.now(UTC)
+    if now >= dormant_until:
+        return True
+    if chains_since is None:
+        return False
+    return chains_since >= dormancy_chains_for(stall_count)
+
+
 def draw_weight(
     weight: float,
     dormant_until: datetime | None,
     *,
+    stall_count: int = 0,
+    chains_since: int | None = None,
     now: datetime | None = None,
 ) -> float:
     """抽選に使う実効的な重み。
@@ -241,9 +288,14 @@ def draw_weight(
     if dormant_until is None:
         return weight
 
-    if now < dormant_until:
+    if not is_awake(dormant_until, stall_count, chains_since, now=now):
         # 休眠中。ただし十分に良いものは通す（aspiration criterion）
         return weight if weight >= ASPIRATION_WEIGHT else 0.0
+
+    if now < dormant_until:
+        # 時計はまだだが、ほかの連鎖を十分に挟んで戻ってきた。
+        # 「ふとしたときに思いつく」のはここでも同じなので下駄を乗せる。
+        return weight * REVIVAL_BOOST
 
     if now - dormant_until <= REVIVAL_WINDOW:
         # 明けたばかり。「ふとしたときに思いつく」ための下駄。
