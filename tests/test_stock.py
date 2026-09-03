@@ -68,3 +68,40 @@ def test_domain_request_prefers_matching_stock(store):
     service.generate_idea(store, use_llm=False, domain="nature")
     received = service.receive_idea(store, domain="nature", use_llm=False)
     assert received.domain == "nature"
+
+
+def test_the_promise_holds_even_when_a_chain_will_not_close(tmp_path):
+    """**判定前のものは、どんな回り方をしても出さない。**
+
+    「独り言を垂れ流さない」はこのシステムの核心の約束。だが以前は、連鎖が
+    閉じないまま上限に達したときの安全弁が、判定前のものをそのまま出して
+    いた。40回に1回ほど漏れていて、CI で初めて落ちた（手元では通っていた）。
+
+    乱数で表に出たり出なかったりする種類なので、**繰り返して確かめる**。
+    1回のテストが「たまたま通った」で終わらないように。
+    """
+    from ideaman.store import Store
+
+    leaked = []
+    for trial in range(25):
+        store = Store(tmp_path / f"t{trial}.db")
+        try:
+            for _ in range(20):
+                idea = service.receive_idea(store, use_llm=False)
+                if idea.verdict is None:
+                    leaked.append(idea.text)
+                    break
+        finally:
+            store.close()
+    assert not leaked, f"判定前のものが漏れた: {leaked}"
+
+
+def test_the_last_resort_still_returns_something(store, monkeypatch):
+    """上限に達しても、待たせた人には何かを返すこと。
+
+    約束を守るために黙ることはしない。判定を確定させてから出す。
+    """
+    monkeypatch.setattr(service, "MAX_THINKING_STEPS", 1)
+    idea = service.receive_idea(store, use_llm=False)
+    assert idea.text.strip()
+    assert idea.verdict in ("chosen", "kept")

@@ -252,9 +252,24 @@ def receive_idea(
         if ready is not None:
             return ready
 
-    # ここまで来るのは連鎖が閉じないほど回した場合。考えたものを無駄に
-    # しないよう、直近のものをそのまま出す。
-    log.warning("連鎖が閉じないまま上限に達したので、直近の考えを出す")
+    # ここまで来るのは連鎖が閉じないほど回した場合。
+    #
+    # **判定前のものをそのまま出してはいけない。** 連鎖の途中の一片は文脈が
+    # 無く、単独で読むと意味不明になる（「独り言を垂れ流さない」がこの
+    # システムの核心の約束）。以前はここで素通ししていて、40回に1回ほど
+    # 独り言が漏れていた。
+    #
+    # 待たせている以上、何かは返す。だから**その場で連鎖を閉じて判定を
+    # 確定させてから**出す。
+    log.warning("連鎖が閉じないまま上限に達したので、その場で判定する")
+    _close_chain(store, fresh.id, use_llm=use_llm)
+
+    ready = store.take_ready(domain=domain)
+    if ready is not None:
+        return ready
+
+    # 判定はしたが誰も選ばれなかった。それでも判定済みのものを返す
+    # （選ばれなかった＝ kept。捨ててはいないので読める）。
     return store.mark_seen(fresh.id)
 
 
