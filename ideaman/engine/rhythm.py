@@ -263,7 +263,10 @@ def is_awake(
     if now >= dormant_until:
         return True
     if chains_since is None:
-        return False
+        # どの連鎖で眠ったか分からない語（列を足す前に眠ったもの）。
+        # **時計だけで抑え込まない。** それは直したはずの振る舞いで、
+        # 抑え込むと移行した DB は数時間ぶん壊れたままになる。
+        return True
     return chains_since >= dormancy_chains_for(stall_count)
 
 

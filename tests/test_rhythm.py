@@ -129,13 +129,17 @@ def test_dormancy_is_capped():
 
 
 def test_dormant_terms_drop_out_of_the_draw():
-    assert rhythm.draw_weight(1.0, NOW + timedelta(hours=1), now=NOW) == 0.0
+    # 眠ったばかり（まだ1本も連鎖を挟んでいない）
+    assert rhythm.draw_weight(1.0, NOW + timedelta(hours=1), chains_since=0, now=NOW) == 0.0
 
 
 def test_aspiration_lets_strong_terms_through_while_dormant():
     """休眠中でも十分に良いものは通す（連続がダメなのではない）。"""
     strong = rhythm.ASPIRATION_WEIGHT + 0.5
-    assert rhythm.draw_weight(strong, NOW + timedelta(hours=1), now=NOW) == strong
+    assert (
+        rhythm.draw_weight(strong, NOW + timedelta(hours=1), chains_since=0, now=NOW)
+        == strong
+    )
 
 
 def test_terms_come_back_with_a_boost():
@@ -338,3 +342,14 @@ def test_dormancy_ends_by_time_even_without_further_thinking():
     assert rhythm.is_awake(
         until, 0, rhythm.DORMANCY_CHAINS, now=slept + timedelta(minutes=1)
     )
+
+
+def test_terms_slept_before_the_column_existed_are_not_held_back():
+    """移行した DB を、直したはずの振る舞いのまま数時間動かさない。"""
+    from datetime import UTC, datetime, timedelta
+
+    from ideaman.engine import rhythm
+
+    slept = datetime(2026, 1, 1, tzinfo=UTC)
+    until = rhythm.dormancy_for(0, now=slept)
+    assert rhythm.is_awake(until, 0, None, now=slept + timedelta(minutes=1))
