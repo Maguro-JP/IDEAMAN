@@ -228,3 +228,19 @@ def test_the_projects_own_name_is_not_a_material(tmp_path):
 def test_harvest_survives_a_directory_without_git(tmp_path):
     (tmp_path / "a.md").write_text("会計の締めを早める。\n", encoding="utf-8")
     assert [c.term for c in harvest(tmp_path)]
+
+
+def test_qualifier_words_are_not_materials(tmp_path):
+    """「実際」「直近」のような副詞的な語は部品ではない。
+
+    自分のコメントから拾って材料に混ざっていた。「実際の待ち時間を
+    反転させる」のような、部品を指していない文になる。
+    """
+    (tmp_path / "a.md").write_text(
+        "実際の配送は直近の汎用な既定より遅い。配送の締切を見直す。\n" * 3,
+        encoding="utf-8",
+    )
+    terms = [c.term for c in harvest(tmp_path, min_files=1, include_git=False)]
+    assert "配送" in terms
+    for qualifier in ("実際", "直近", "汎用", "既定"):
+        assert qualifier not in terms

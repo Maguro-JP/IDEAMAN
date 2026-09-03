@@ -357,3 +357,20 @@ def test_recent_terms_are_penalised_so_ideas_do_not_echo(store):
             overlaps.append(len(a & b) / len(b))
     mean = sum(overlaps) / len(overlaps)
     assert mean < 0.35, f"隣り合う案が語を共有しすぎている: {mean:.0%}"
+
+
+def test_every_concept_can_bring_a_way_of_doing_things():
+    """概念は「やり方」を持っているものにする。
+
+    元は「星座は、手紙のかたちをしている」という警句のために選んだ詩的な
+    語だったが、いまのテンプレートは「{concept}のやり方を{material}に
+    持ち込む」と聞く。苔や湯気には持ち込むべきやり方が無い。
+
+    機械では判定できないので、**やり方を持たないと分かっている語**が
+    戻ってこないことだけを守る。
+    """
+    from ideaman.engine.lexicon import default_lexicon
+
+    names = {t.term for t in default_lexicon().pool("concepts")}
+    for imageonly in ("苔", "湯気", "静電気", "雨音", "影", "年輪", "寝言"):
+        assert imageonly not in names, f"{imageonly} には持ち込むべきやり方が無い"

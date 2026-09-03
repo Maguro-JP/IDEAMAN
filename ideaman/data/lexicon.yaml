@@ -5,74 +5,83 @@
 # domains が空の語はどの分野とも衝突しうる「自由な語」として扱われる。
 
 concepts:
+  # 遠くから持ってくる概念。**「やり方」を持っているものにする。**
+  #
+  # 元は「星座は、手紙のかたちをしている」のような警句のために選んだ
+  # 詩的なイメージ語だった。だが今のテンプレートは「{concept}のやり方を
+  # {material}に持ち込む」「{material}と{concept}を同じ仕組みで扱えないか」
+  # と聞く。苔や湯気には持ち込むべきやり方が無いので、ここが空回りしていた。
+  #
+  # 選ぶ基準は「ソフトウェアから遠い」かつ「仕組みが名指しできる」。
+  # 索引・改札・棚卸し・当番表——遠いのに、やり方がはっきりしている。
   - {term: 手紙, domains: [communication, analog]}
   - {term: 地図, domains: [space, information]}
-  - {term: 影, domains: [physical, art]}
+  - {term: 検針, domains: [physical, rule]}
   - {term: 待ち時間, domains: [time, ux]}
   - {term: 忘却, domains: [memory, mind]}
   - {term: 台所, domains: [daily, space]}
   - {term: 改札, domains: [city, system]}
-  - {term: 雨音, domains: [nature, sound]}
+  - {term: 回覧板, domains: [social, information]}
   - {term: 図書館, domains: [knowledge, space]}
   - {term: 名前, domains: [identity, language]}
   - {term: 行列, domains: [city, system]}
-  - {term: 温度, domains: [physical, sense]}
+  - {term: 定員, domains: [rule, space]}
   - {term: 賞味期限, domains: [time, daily]}
-  - {term: 集合写真, domains: [memory, social]}
+  - {term: 名簿, domains: [social, information]}
   - {term: 迷子, domains: [space, emotion]}
   - {term: 目次, domains: [information, structure]}
-  - {term: 独り言, domains: [mind, sound]}
-  - {term: 折り目, domains: [physical, analog]}
+  - {term: 議事録, domains: [language, memory]}
+  - {term: しおり, domains: [memory, structure]}
   - {term: 通知, domains: [ux, communication]}
   - {term: 待合室, domains: [space, time]}
   - {term: 方言, domains: [language, culture]}
   - {term: 引き出し, domains: [daily, structure]}
-  - {term: 潮の満ち引き, domains: [nature, time]}
-  - {term: 落書き, domains: [art, play]}
+  - {term: 時刻表, domains: [time, structure]}
+  - {term: 貼り紙, domains: [language, space]}
   - {term: 定食屋, domains: [daily, culture]}
   - {term: 補助輪, domains: [learning, physical]}
   - {term: 交差点, domains: [city, space]}
   - {term: 訃報, domains: [social, emotion]}
-  - {term: 星座, domains: [nature, story]}
-  - {term: 靴紐, domains: [daily, physical]}
+  - {term: 潮見表, domains: [nature, time, information]}
+  - {term: 予約席, domains: [rule, space]}
   - {term: 予報, domains: [time, information]}
   - {term: 相槌, domains: [communication, social]}
   - {term: 廃線, domains: [city, memory]}
-  - {term: 味噌汁, domains: [daily, culture]}
+  - {term: 仕込み, domains: [time, food]}
   - {term: 索引, domains: [knowledge, structure]}
   - {term: 停電, domains: [system, emotion]}
   - {term: 遠回り, domains: [space, play]}
-  - {term: 声変わり, domains: [identity, sound]}
-  - {term: 実家, domains: [memory, space]}
+  - {term: 見習い, domains: [social, learning]}
+  - {term: 実習, domains: [learning, social]}
   - {term: 借り物, domains: [social, economy]}
   - {term: 早送り, domains: [time, ux]}
-  - {term: 苔, domains: [nature, time]}
+  - {term: 剪定, domains: [nature, rule]}
   - {term: 合鍵, domains: [trust, physical]}
   - {term: 給水塔, domains: [city, system]}
-  - {term: 寝言, domains: [mind, sound]}
+  - {term: 当番表, domains: [social, rule, time]}
   - {term: 端数, domains: [economy, structure]}
-  - {term: 手癖, domains: [identity, learning]}
+  - {term: 手順書, domains: [rule, learning]}
   - {term: 校歌, domains: [culture, memory]}
   - {term: 発酵, domains: [nature, time]}
   - {term: 非常口, domains: [system, space]}
   - {term: 折り返し地点, domains: [time, structure]}
   - {term: 常連, domains: [social, daily]}
   - {term: 見出し, domains: [information, language]}
-  - {term: 湯気, domains: [physical, sense]}
+  - {term: 下足札, domains: [physical, identity]}
   - {term: 番号札, domains: [system, social]}
   - {term: 下書き, domains: [creation, structure]}
   - {term: 空き家, domains: [city, memory]}
   - {term: 口約束, domains: [trust, communication]}
   - {term: 目覚まし, domains: [time, daily]}
   - {term: 相部屋, domains: [social, space]}
-  - {term: 雑音, domains: [sound, information]}
+  - {term: 校正, domains: [language, rule]}
   - {term: 引っ越し, domains: [space, emotion]}
   - {term: 献立, domains: [daily, structure]}
   - {term: 匿名, domains: [identity, trust]}
-  - {term: 年輪, domains: [nature, memory]}
+  - {term: 棚卸し, domains: [economy, time]}
   - {term: 中古品, domains: [economy, memory]}
   - {term: 待ち合わせ, domains: [social, space]}
-  - {term: 静電気, domains: [physical, sense]}
+  - {term: 検温, domains: [physical, rule]}
   - {term: 敬語, domains: [language, social]}
 
 operations:
