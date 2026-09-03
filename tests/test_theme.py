@@ -411,3 +411,69 @@ def test_weak_templates_name_what_they_compare():
         assert any("aspect" in n for n in template.needs), (
             f"{template.id} は概念を持ち出すのに、何を比べるか言っていない"
         )
+
+
+# --- 材料は「語」であること ----------------------------------------------
+# 自動収集は最大6文字程度に収まるが、手で登録する経路（--add / Web / MCP）は
+# 何でも通ってしまう。材料は文中に名詞として埋め込まれるので、文を貼られると
+# 「予約の締切をどうするか決めきれていないの一番よく使う部分を…」になる。
+
+
+def test_a_pasted_sentence_is_not_a_material():
+    from ideaman.store import clean_material
+
+    assert clean_material("予約の締切をどうするか決めきれていない") is None
+    assert clean_material("これは 空白入り") is None
+    assert clean_material("終わった。") is None
+
+
+def test_words_are_kept(store):
+    from ideaman.store import clean_material
+
+    for word in ("通知", "待ち時間", "キャンセル", "棚卸し", "失敗したときの挙動"):
+        assert clean_material(word) == word
+    assert clean_material("  語彙  ") == "語彙"
+
+
+def test_the_length_limit_differs_by_script():
+    """日本語の語は短く、英語の語は長い。一律だとどちらかが不当に弾かれる。"""
+    from ideaman.store import clean_material
+
+    assert clean_material("authentication") == "authentication"
+    assert clean_material("user_authentication_middleware_factory") is None
+    assert clean_material("失敗したときの挙動") is not None
+    assert clean_material("あ" * 20) is None
+
+
+def test_symbols_and_single_letters_are_rejected():
+    from ideaman.store import clean_material
+
+    for junk in ("！！！", "a", "…", "", "  "):
+        assert clean_material(junk) is None
+
+
+def test_bad_materials_never_reach_the_database(store):
+    theme = store.add_theme("t")
+    added = store.add_materials(
+        theme.id, ["通知", "予約の締切をどうするか決めきれていない", "！！！", "語彙"]
+    )
+    assert added == 2
+    assert store.materials(theme.id) == ["通知", "語彙"]
+
+
+def test_doctor_flags_a_material_that_slipped_in_earlier(store):
+    """すでに DB に入っている壊れた材料も見つけること。"""
+    from ideaman.doctor import diagnose
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖", "在庫"])
+    # 検証を通さず直接入れる（古い DB を再現）
+    store.conn.execute(
+        "INSERT INTO theme_terms (theme_id, term) VALUES (?, ?)",
+        (theme.id, "予約の締切をどうするか決めきれていない"),
+    )
+    store.conn.commit()
+
+    junk = next(f for f in diagnose(store).findings if "的外れ" in f.title)
+    assert "予約の締切をどうするか決めきれていない" in junk.detail
+    assert junk.fix and "--drop" in junk.fix

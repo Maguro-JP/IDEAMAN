@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import diversity, doctor, harvest, service
 from .notify import ConsoleNotifier, QueueNotifier
-from .store import Store
+from .store import Store, clean_material
 from .worker import DEFAULT_STOCK, Worker
 
 
@@ -84,8 +84,15 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
 
     theme = store.add_theme(args.name, args.note)
     if args.add:
-        added = store.add_materials(theme.id, args.add.split(","))
+        wanted = args.add.split(",")
+        added = store.add_materials(theme.id, wanted)
         print(f"材料を {added} 件足しました")
+        # 黙って捨てると「入れたのに出てこない」になる。理由まで書く。
+        rejected = [w.strip() for w in wanted if clean_material(w) is None]
+        rejected = [w for w in rejected if w]
+        if rejected:
+            print(f"次は材料になりません: {'、'.join(rejected)}")
+            print("  材料は**語**です。文や記号の羅列は、文中に埋め込むと壊れます。")
     if args.drop:
         dropped = store.drop_materials(theme.id, args.drop.split(","))
         print(f"材料を {dropped} 件外しました")

@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .harvest import STOPWORDS
-from .store import Store
+from .store import Store, clean_material
 
 #: これより長く何も考えていなければ、ワーカーが止まっている可能性が高い。
 STALE_AFTER = timedelta(hours=6)
@@ -112,7 +112,11 @@ def _check_themes(store: Store) -> list[Finding]:
     out: list[Finding] = []
     for theme in active:
         materials = store.materials(theme.id)
-        junk = [m for m in materials if m.lower() in STOPWORDS or len(m) < 2]
+        junk = [
+            m
+            for m in materials
+            if m.lower() in STOPWORDS or clean_material(m) is None
+        ]
         if not materials:
             out.append(
                 Finding(

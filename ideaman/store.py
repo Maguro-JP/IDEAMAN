@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Mapping
@@ -42,6 +43,47 @@ DUPLICATE_FACTOR = 1.03
 #: 重みの下限・上限。これが無いと一度嫌われた語が二度と出てこなくなる。
 MIN_WEIGHT = 0.2
 MAX_WEIGHT = 5.0
+
+
+#: 材料として受け付ける長さの上限。**文字種で分ける。**
+#: 日本語の語は短く（自動収集の実測で最大6文字）、英語の語は長い
+#: （authentication は14文字）。一律にすると、どちらかが不当に弾かれる。
+MAX_MATERIAL_LEN_JA = 12
+MAX_MATERIAL_LEN_ASCII = 24
+
+#: かな・漢字を含むか。含めば「日本語の語」として短い上限を使う。
+_JAPANESE = re.compile(r"[ぁ-んァ-ヴ一-龥々〆ヵヶ]")
+
+#: 材料に入っていたら「語ではなく文」と判断する文字。
+_NOT_A_WORD = re.compile(r"[。、！？!?,\s]")
+
+#: 少なくとも1つは文字が要る（「！！！」を弾く）。
+_HAS_LETTER = re.compile(r"[0-9A-Za-zぁ-んァ-ヴ一-龥々〆ヵヶー]")
+
+
+def clean_material(term: str) -> str | None:
+    """材料として使える形に整える。使えないなら None。
+
+    材料は**文中に名詞として埋め込まれる**。文を貼られると
+    「予約の締切をどうするか決めきれていないの一番よく使う部分を…」に
+    なるので、語であることをここで確かめる。
+
+    弾くのは: 空、1文字、長すぎるもの、句読点や空白を含むもの（＝文）、
+    文字を含まないもの（「！！！」）。
+    """
+    term = term.strip()
+    if len(term) < 2:
+        return None
+    limit = (
+        MAX_MATERIAL_LEN_JA
+        if _JAPANESE.search(term)
+        else MAX_MATERIAL_LEN_ASCII
+    )
+    if len(term) > limit:
+        return None
+    if _NOT_A_WORD.search(term) or not _HAS_LETTER.search(term):
+        return None
+    return term
 
 
 @dataclass(frozen=True)
@@ -342,9 +384,9 @@ class Store:
             新しく足した数。
         """
         added = 0
-        for term in terms:
-            term = term.strip()
-            if not term:
+        for raw in terms:
+            term = clean_material(raw)
+            if term is None:
                 continue
             cur = self.conn.execute(
                 "INSERT OR IGNORE INTO theme_terms (theme_id, term) VALUES (?, ?)",
