@@ -374,3 +374,40 @@ def test_every_concept_can_bring_a_way_of_doing_things():
     names = {t.term for t in default_lexicon().pool("concepts")}
     for imageonly in ("苔", "湯気", "静電気", "雨音", "影", "年輪", "寝言"):
         assert imageonly not in names, f"{imageonly} には持ち込むべきやり方が無い"
+
+
+def test_every_pool_is_reachable_with_and_without_a_theme():
+    """テーマの有無にかかわらず、全ての語彙プールが使われること。
+
+    側面を足す改修で、テーマ未登録の間だけ operations プールが丸ごと
+    死んでいた（テンプレートから operation が消えたため）。語彙を増やしても
+    引かれなければ意味がないので、両方の経路で確かめる。
+    """
+    from ideaman.engine.lexicon import POOL_NAMES, default_lexicon
+
+    lexicon = default_lexicon()
+    for materials in (["通知"], []):
+        used = set()
+        for seed in range(600):
+            for pool, _ in combine(materials=materials, seed=seed).terms:
+                used.add(pool)
+        missing = set(POOL_NAMES) - used
+        label = "テーマあり" if materials else "テーマなし"
+        assert not missing, f"{label} のとき {missing} が一度も引かれない"
+
+
+def test_weak_templates_name_what_they_compare():
+    """側面を名指ししない型は弱い。
+
+    「給水塔にあって放浪に無いものは何か」は、何を比べているのか言って
+    いないので読み手に全部の仕事を投げていた。概念を持ち出す型は、
+    比較の的（側面）を必ず名指しすること。
+    """
+    from ideaman.engine.lexicon import default_lexicon
+
+    for template in default_lexicon().templates:
+        if "concept_a" not in template.needs:
+            continue
+        assert any("aspect" in n for n in template.needs), (
+            f"{template.id} は概念を持ち出すのに、何を比べるか言っていない"
+        )

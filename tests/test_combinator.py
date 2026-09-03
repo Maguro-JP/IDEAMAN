@@ -57,9 +57,11 @@ def test_weights_shift_the_draw():
     total = 0
     for i in range(200):
         seed = combine(seed=i, weights=weights, lexicon=lexicon)
-        if "operation" in seed.slots:
-            total += 1
-            hits += seed.slots["operation"] == favored
+        # operation / operation_v はどちらも operations プールから引く
+        for slot in ("operation", "operation_v"):
+            if slot in seed.slots:
+                total += 1
+                hits += seed.slots[slot] == favored
 
     assert total > 0, "operation を使うテンプレが一度も選ばれていない"
     assert hits / total > 0.8

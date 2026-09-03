@@ -17,6 +17,11 @@
 #
 # 各テンプレは needs で必要なプレースホルダを宣言する。
 
+# **側面を名指ししない型は弱い。** 出力を型ごとに分けて読んで分かった:
+# 「給水塔にあって放浪に無いものは何か」「連想と行列を同じ仕組みで扱えないか。
+# 鍵は『全部公開する』こと」——どちらも何を比べているのか言っていないので、
+# 読み手に全部の仕事を投げている。側面を入れると、比較の的が決まる。
+
 templates:
   # --- 具体策 -------------------------------------------------------
   - id: swap_aspect
@@ -46,8 +51,8 @@ templates:
 
   - id: two_materials
     tone: proposal
-    needs: [material, concept_a, operation]
-    text: "{material}と{concept_a}を同じ仕組みで扱えないか。鍵は「{operation}」こと。"
+    needs: [material, concept_a, aspect]
+    text: "{material}と{concept_a}は、{aspect}だけ見れば同じではないか。"
 
   - id: for_one_person
     tone: proposal
@@ -79,8 +84,8 @@ templates:
 
   - id: question_absence
     tone: question
-    needs: [material, concept_a]
-    text: "{concept_a}にあって{material}に無いものは何か。"
+    needs: [material, concept_a, aspect]
+    text: "{material}の{aspect}を、{concept_a}のそれと並べてみる。無いものは何か。"
 
   - id: question_constrained
     tone: question
@@ -91,8 +96,20 @@ templates:
   # 汎用の概念だけで作る。テーマがある場合よりどうしても浅くなる。
   - id: bare_collision
     tone: proposal
-    needs: [concept_a, concept_b, operation, probe]
-    text: "{concept_a}のやり方を{concept_b}に持ち込む。鍵は「{operation}」こと。まず{probe}。"
+    needs: [concept_a, concept_b, aspect, probe]
+    text: "{concept_a}のやり方を{concept_b}に持ち込む。特に{aspect}のところ。まず{probe}。"
+
+  # フォールバックにも operation を使う型を残す。これが無いと、テーマ未登録の
+  # 間だけ operations プールが丸ごと死ぬ（テストが捕まえた）。
+  - id: bare_swap
+    tone: proposal
+    needs: [concept_a, aspect, operation_v, probe]
+    text: "{concept_a}の{aspect}を{operation_v}。何が変わるか。まず{probe}。"
+
+  - id: bare_constrained
+    tone: question
+    needs: [concept_a, constraint, aspect]
+    text: "{constraint}{concept_a}を作り直すとしたら、{aspect}はどうなるか。"
 
   - id: bare_question
     tone: question
