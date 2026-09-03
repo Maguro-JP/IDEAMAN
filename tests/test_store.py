@@ -235,3 +235,90 @@ def test_counters(store):
     store.bump_counter("duplicate_hits")
     store.bump_counter("duplicate_hits", 2)
     assert store.counter("duplicate_hits") == 3
+
+
+# --- スレッドごとの接続 --------------------------------------------------
+# IDEAMAN_EMBED_WORKER=1 は Web のリクエスト処理とワーカーを同じプロセスで
+# 動かす。接続を共有するとトランザクションまで共有してしまう。
+
+
+def test_a_commit_in_another_thread_does_not_finish_my_write(store):
+    """別スレッドの commit が、こちらの書きかけを確定させないこと。
+
+    `rate()` は「評価を記録して重みを動かす」までで一つ。途中で確定される
+    と、評価だけ残って重みが動いていない状態がディスクに残りうる。
+    """
+    import sqlite3
+    import threading
+
+    from ideaman import service
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙"])
+    idea = service.generate_idea(store, use_llm=False)
+
+    # 評価の途中まで（ratings は入れたが重みはまだ、commit もまだ）
+    store.conn.execute(
+        "INSERT INTO ratings (idea_id, score, created_at) "
+        "VALUES (?, 1, datetime('now'))",
+        (idea.id,),
+    )
+
+    def other_thread() -> None:
+        store.conn.execute("SELECT 1")
+        store.conn.commit()
+
+    thread = threading.Thread(target=other_thread)
+    thread.start()
+    thread.join()
+
+    outside = sqlite3.connect(store.path)
+    try:
+        count = outside.execute(
+            "SELECT COUNT(*) FROM ratings WHERE idea_id = ?", (idea.id,)
+        ).fetchone()[0]
+    finally:
+        outside.close()
+    assert count == 0, "commit していない書き込みが確定している"
+
+
+def test_each_thread_gets_its_own_connection(store):
+    import threading
+
+    seen = []
+    seen.append(id(store.conn))
+
+    def grab() -> None:
+        seen.append(id(store.conn))
+
+    thread = threading.Thread(target=grab)
+    thread.start()
+    thread.join()
+    assert seen[0] != seen[1]
+
+
+def test_threads_can_write_at_the_same_time(store):
+    """Web とワーカーの同居で、書き込みがぶつかっても落ちないこと。"""
+    import threading
+
+    from ideaman import service
+
+    theme = store.add_theme("t")
+    store.add_materials(theme.id, ["通知", "語彙", "連鎖"])
+    errors: list[BaseException] = []
+
+    def churn() -> None:
+        try:
+            for _ in range(15):
+                service.generate_idea(store, use_llm=False)
+        except BaseException as exc:  # noqa: BLE001 - 何が出ても記録する
+            errors.append(exc)
+
+    threads = [threading.Thread(target=churn) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, errors
+    assert store.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()[0] >= 45

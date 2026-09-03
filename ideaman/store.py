@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -149,19 +150,45 @@ class Store:
         self.path = Path(path) if path is not None else default_db_path()
         if self.path.parent != Path("."):
             self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA foreign_keys = ON")
-        # Web・ワーカー・Bot が同じ DB を同時に触るため。
-        # WAL なら読み手が書き手を待たない。
-        self.conn.execute("PRAGMA journal_mode = WAL")
-        self.conn.execute("PRAGMA busy_timeout = 5000")
+
+        # **接続はスレッドごとに持つ。**
+        #
+        # 一つの接続を複数スレッドで共有すると、破損はしない（threadsafety=3）
+        # が、**同じトランザクションを共有してしまう**。片方の commit が、
+        # もう片方の書きかけを確定させる。`rate()` は「評価を記録して重みを
+        # 動かす」までで一つのはずなのに、途中で確定されうる。
+        #
+        # `IDEAMAN_EMBED_WORKER=1`（Web とワーカーを1プロセスに同居）で
+        # 実際に起きる。プロセスを分けたときは元から別接続なので問題ない。
+        # WAL と busy_timeout があるので、接続を分けても待ち合わせは効く。
+        self._local = threading.local()
+        self._connections: list[sqlite3.Connection] = []
+        self._lock = threading.Lock()
+
+        conn = self.conn
         # 表 → 列の追加 → 索引 の順。Phase 1 の DB には新しい列がまだ無いので、
         # 索引を先に張ろうとすると落ちる。
-        self.conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
         self._migrate()
-        self.conn.executescript(INDEXES_PATH.read_text(encoding="utf-8"))
-        self.conn.commit()
+        conn.executescript(INDEXES_PATH.read_text(encoding="utf-8"))
+        conn.commit()
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """このスレッド用の接続。無ければ作る。"""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self.path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+            # Web・ワーカー・Bot が同じ DB を同時に触るため。
+            # WAL なら読み手が書き手を待たない。
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute("PRAGMA busy_timeout = 5000")
+            self._local.conn = conn
+            with self._lock:
+                self._connections.append(conn)
+        return conn
 
     def _migrate(self) -> None:
         """Phase 1 の DB を開いたときに足りない列を足す。
@@ -195,7 +222,19 @@ class Store:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
     def close(self) -> None:
-        self.conn.close()
+        """全スレッド分の接続を閉じる。
+
+        閉じたあとに使われても、`conn` が新しい接続を作り直すだけなので
+        壊れない（テストで開き直す場面がある）。
+        """
+        with self._lock:
+            connections, self._connections = self._connections, []
+        for conn in connections:
+            try:
+                conn.close()
+            except sqlite3.Error:  # すでに閉じている / 使用中
+                pass
+        self._local = threading.local()
 
     # --- 重み ---------------------------------------------------------
 
