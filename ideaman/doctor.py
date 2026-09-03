@@ -216,6 +216,36 @@ def _check_thinking(store: Store) -> list[Finding]:
     return out
 
 
+#: 材料のうち、これ以上が眠っていたら「考える材料が無い」状態。
+DORMANT_SHARE = 0.5
+
+
+def _check_dormancy(store: Store) -> list[Finding]:
+    """材料が眠り込んでいないか。
+
+    休眠は「しばらく別のことを考える」ための仕掛けなので、少数が眠って
+    いるのは健康。**材料が軒並み眠るのは別**で、そうなると遠い概念どうし
+    をぶつけるだけになり、あなたのプロジェクトから離れた警句に戻る。
+    実際に稼働させたとき 10語中10語が眠り、しかも誰も気づけなかった。
+    """
+    materials = {m for theme in store.themes() for m in store.materials(theme.id)}
+    if not materials:
+        return []
+    asleep = materials & set(store.dormant_terms())
+    if len(asleep) <= len(materials) * DORMANT_SHARE:
+        return []
+    return [
+        Finding(
+            "warn",
+            "材料がほとんど眠っています",
+            f"{len(materials)} 語のうち {len(asleep)} 語が休眠中です。"
+            "このあいだは、あなたの語を使わない案ばかりになります。",
+            "ideaman diversity で休眠と復帰の数を見る"
+            "（材料が少なすぎるなら theme --add で足す）",
+        )
+    ]
+
+
 def _check_exposure() -> list[Finding]:
     """公開する場所で無防備になっていないか。
 
@@ -290,6 +320,7 @@ def diagnose(store: Store) -> Diagnosis:
     findings = [_check_storage(store)]
     findings += _check_themes(store)
     findings += _check_thinking(store)
+    findings += _check_dormancy(store)
     findings += _check_delivery(store)
     findings += _check_exposure()
     findings.append(_check_learning(store))

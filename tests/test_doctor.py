@@ -139,3 +139,30 @@ def test_a_pile_of_undelivered_posts_is_flagged(store):
     piled = next(f for f in diagnose(store).findings if "配信待ち" in f.title)
     assert piled.level == "warn"
     assert "8 件" in piled.title
+
+
+def test_doctor_notices_when_the_materials_are_all_asleep(tmp_path):
+    """材料が軒並み眠っていたら言うこと。
+
+    実際に稼働させたとき 10語中10語が眠っていたのに、`doctor` は
+    「問題ありません」に近い顔をしていた。**黙って劣化するのを
+    見つけるのがこのコマンドの役目**なので、これは見落としだった。
+    """
+    from ideaman.doctor import diagnose
+    from ideaman.store import Store
+
+    store = Store(tmp_path / "d.db")
+    try:
+        theme = store.add_theme("t")
+        materials = ["通知", "語彙", "連鎖", "在庫"]
+        store.add_materials(theme.id, materials)
+        assert not _titles(diagnose(store), "材料がほとんど眠っています")
+
+        store.sleep_terms([("materials", m) for m in materials])
+        assert _titles(diagnose(store), "材料がほとんど眠っています")
+    finally:
+        store.close()
+
+
+def _titles(diagnosis, title):
+    return [f for f in diagnosis.findings if f.title == title]
