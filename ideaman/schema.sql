@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS weights (
     -- 何本目の連鎖で眠ったか。休眠は時間だけでなく、そのあとに
     -- どれだけ考えたかでも明ける（回し続けると全部眠ってしまう）。
     slept_at_chain INTEGER,
+    -- その語が何回の評価を通ったか。多く出た語ほど1回の重みを小さくする。
+    rated_count   INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (pool, term)
 );
 

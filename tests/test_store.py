@@ -416,3 +416,28 @@ def test_learned_phrasing_weights_are_reset_on_open(tmp_path):
         assert weights["索引"] == 2.2
     finally:
         reopened.close()
+
+
+def test_rating_the_same_term_over_and_over_has_diminishing_effect(store):
+    """同じ語を評価し続けても、際限なく太らないこと。
+
+    多く出た語ほど多く評価される。掛け算で積み上げると、たまたま多く
+    出た語が太り、太るからまた出る。**内容に関係なく7割 👍 を押す人**の
+    30日模擬で、当たり率が 11% まで落ちた——評価しない場合の 15% より
+    悪い。評価が出力を悪くしていた。
+    """
+    idea_seed, idea = _save(store)
+    term = _idea_terms(idea_seed)[0][1]
+
+    store.rate(idea.id, 1)
+    first_step = store.weights()[term] - 1.0
+
+    for _ in range(30):
+        store.rate(idea.id, 1)
+    before = store.weights()[term]
+    store.rate(idea.id, 1)
+    later_step = store.weights()[term] - before
+
+    assert later_step < first_step / 2, (first_step, later_step)
+    # それでも「好まれている」向きは保つ
+    assert store.weights()[term] > 1.0

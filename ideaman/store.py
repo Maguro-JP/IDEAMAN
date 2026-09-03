@@ -36,6 +36,12 @@ def default_db_path() -> Path:
 UPVOTE_FACTOR = 1.15
 DOWNVOTE_FACTOR = 0.85
 
+#: 評価の平均を取る件数。**その人がふだんどう押すか**を見るための窓。
+RATING_BASELINE_WINDOW = 50
+
+#: この回数までは、評価をそのまま重みに掛ける（学習を遅くしない）。
+FREE_RATINGS = 2
+
 #: 同じ組み合わせに再到達したときの倍率。
 #: 出力はしないが、何度も辿り着くならそこに何かがある、という弱い信号。
 #: 👍 よりずっと小さいのは、これが人の評価ではなく偶然の再来だから。
@@ -167,6 +173,32 @@ def utcnow() -> datetime:
     return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
+def _damping(times_rated: int) -> float:
+    """その語が何度も評価を通っているとき、1回あたりの効きを弱める。
+
+    多く出た語ほど多く評価される。掛け算で積み上げると、たまたま多く
+    出た語が太り、太るからまた出る。**内容に関係なく7割 👍 を押す人**の
+    模擬で、当たり率が 28% → 10% に落ちた（評価しない場合は 15%）。
+    評価が出力を悪くしていた。
+
+    最初の数回は素通しにする。学習が遅くなるのは避けたい——効かせたい
+    のは「同じ語ばかりが評価され続ける」ところだけ。
+    """
+    return 1.0 if times_rated < FREE_RATINGS else (FREE_RATINGS / times_rated) ** 0.5
+
+
+def _factor_for(signal: float) -> float:
+    """平均からのずれを、重みに掛ける倍率にする。
+
+    ずれが ±1（いつもと逆の押し方）で従来どおりの ×1.15 / ×0.85。
+    ずれが 0 なら 1.0（＝何も動かさない）。
+    """
+    signal = max(-1.0, min(1.0, signal))
+    if signal > 0:
+        return 1.0 + (UPVOTE_FACTOR - 1.0) * signal
+    return 1.0 - (1.0 - DOWNVOTE_FACTOR) * (-signal)
+
+
 def _now() -> str:
     return utcnow().isoformat()
 
@@ -280,6 +312,8 @@ class Store:
                 ("stall_count", "INTEGER NOT NULL DEFAULT 0"),
                 # 何本目の連鎖で眠ったか。時間ではなく思考量で明けるため。
                 ("slept_at_chain", "INTEGER"),
+                # その語が何回の評価を通ったか。露出で割るのに使う。
+                ("rated_count", "INTEGER NOT NULL DEFAULT 0"),
             ],
             "thought_state": [
                 ("mood", "TEXT NOT NULL DEFAULT ''"),
@@ -1010,6 +1044,35 @@ class Store:
 
     # --- 評価 ---------------------------------------------------------
 
+    def _rating_baseline(self) -> float:
+        """その人がふだんどう押すか（直近の評価の平均）。
+
+        **何にでも 👍 を押す人の 👍 は、何も言っていない。** それを
+        そのまま重みにすると、たまたま多く出た語が引かれ、引かれるから
+        また押され、と太っていく。30日の模擬で、内容に関係なく7割 👍 を
+        押す人の当たり率は 28% → 10% に落ちた（評価しない場合は 15%）。
+        **評価が出力を悪くしていた。**
+
+        その人の平均を引けば、いつもどおりの 👍 は 0 になり、いつもと
+        違う押し方だけが重みを動かす。
+        """
+        rows = self.conn.execute(
+            "SELECT score FROM ratings WHERE score != 0 "
+            "ORDER BY id DESC LIMIT ?",
+            (RATING_BASELINE_WINDOW,),
+        ).fetchall()
+        if not rows:
+            return 0.0
+        return sum(row["score"] for row in rows) / len(rows)
+
+    def _times_rated(self, pool: str, term: str) -> int:
+        """その語が、これまで何回の評価を通ったか。"""
+        row = self.conn.execute(
+            "SELECT rated_count FROM weights WHERE pool = ? AND term = ?",
+            (pool, term),
+        ).fetchone()
+        return (row["rated_count"] or 0) if row else 0
+
     def rate(self, idea_id: int, score: int, note: str | None = None) -> Idea:
         """評価を付け、そのアイデアを構成した語の重みを動かす。
 
@@ -1037,7 +1100,14 @@ class Store:
                 # 言い方の部分は評価で動かさない（`SIGNATURE_IGNORED_POOLS`）。
                 if pool in IdeaSeed.SIGNATURE_IGNORED_POOLS:
                     continue
-                self._bump(pool, term, factor)
+                # 何度も評価された語ほど、1回あたりの動きを小さくする。
+                times = self._times_rated(pool, term)
+                self._bump(pool, term, factor ** _damping(times))
+                self.conn.execute(
+                    "UPDATE weights SET rated_count = COALESCE(rated_count, 0) + 1 "
+                    "WHERE pool = ? AND term = ?",
+                    (pool, term),
+                )
 
         self.conn.commit()
         return self.get(idea_id)
