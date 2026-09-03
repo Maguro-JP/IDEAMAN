@@ -514,14 +514,18 @@ class Store:
         return row["value"] if row else 0
 
     def revived_count(self, now: datetime | None = None) -> int:
-        """休眠が明けて戻ってきた語の数。"""
+        """休眠が明けて戻ってきた語の数。
+
+        **時計が来たものだけを数えてはいけない。** 休眠は連鎖の本数でも
+        明けるので、時計だけで数えると「一度眠って戻ってきた語」を
+        取りこぼす（稼働中の DB で、22 と出るところが実際は 139 だった）。
+        一度でも眠り、いま起きているものを数える。
+        """
         now = now or utcnow()
-        row = self.conn.execute(
-            "SELECT COUNT(*) AS n FROM weights "
-            "WHERE dormant_until IS NOT NULL AND dormant_until <= ?",
-            (now.isoformat(),),
-        ).fetchone()
-        return row["n"]
+        slept = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM weights WHERE dormant_until IS NOT NULL"
+        ).fetchone()["n"]
+        return slept - len(self.dormant_terms(now))
 
     # --- 休眠と復帰 ---------------------------------------------------
 

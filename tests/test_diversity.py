@@ -96,3 +96,32 @@ def test_report_is_readable(store):
     report = measure(store).report()
     assert "連鎖の長さ" in report
     assert "読み方" in report
+
+
+def test_revived_counts_terms_woken_by_either_rule(tmp_path):
+    """休眠が明けた語を、時計で明けたものだけに絞らないこと。
+
+    休眠は「時間が来るか、連鎖を十分に挟むか」で明ける。時計だけで
+    数えていたので、稼働中の DB で復帰が 22 と出るところが実際は 139
+    だった。指標が嘘をつくと、リズムが健康かどうかを見る手段が無くなる。
+    """
+    from ideaman.store import Store
+
+    store = Store(tmp_path / "rev.db")
+    try:
+        terms = [("materials", t) for t in ("通知", "語彙", "連鎖")]
+        store.sleep_terms(terms)
+        # 眠った直後。まだ時計も連鎖も来ていない。
+        assert store.revived_count() == 0
+
+        # 連鎖のほうで明ける（時計はまだ先）。まだアイデアが無いので
+        # 「これまでの連鎖」は 0 本。負の値を入れて、十分前に眠ったことにする。
+        from ideaman.engine import rhythm
+
+        store.conn.execute(
+            "UPDATE weights SET slept_at_chain = ?", (-rhythm.MAX_DORMANCY_CHAINS,)
+        )
+        store.conn.commit()
+        assert store.revived_count() == len(terms)
+    finally:
+        store.close()
