@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IDEAMAN</title>
+<!-- 別ファイルにすると毎回 /favicon.ico を取りに行って 404 になる。
+     ブラウザのコンソールとサーバのログに出続けるので、埋め込む。 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2314161a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23c2a06a'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg: #14161a;
@@ -116,6 +119,7 @@
     margin: .15rem .2rem .15rem 0; border-radius: 4px; cursor: pointer;
   }
   .mat:hover { border-color: var(--accent); color: var(--accent); }
+  .mat.weak { opacity: .45; border-style: dashed; }
   .mat:hover::after { content: " ×"; }
   .theme-toggle {
     background: none; border: 1px solid var(--line); color: var(--dim);
@@ -303,11 +307,16 @@ async function loadThemes() {
       } else {
         // 一語ずつ外せるようにする。--scan は25語まとめて入れるので、
         // 外す手段が無いと、いらない語を含む案が出続ける。
+        const questionable = new Set(theme.questionable || []);
         for (const term of theme.materials) {
           const chip = document.createElement("button");
-          chip.className = "mat";
+          // どのプロジェクトにも出てくる語は薄くして、外せると分かるようにする。
+          // CLI と doctor は警告するのに、Web だけ黙っていた。
+          chip.className = questionable.has(term) ? "mat weak" : "mat";
           chip.textContent = term;
-          chip.title = "外す";
+          chip.title = questionable.has(term)
+            ? "どのプロジェクトにも出てくる語です。押すと外せます"
+            : "外す";
           chip.addEventListener("click", async () => {
             await api(`/api/themes/${theme.id}/materials/drop`, {
               method: "POST",

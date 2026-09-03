@@ -73,6 +73,18 @@ class Diagnosis:
         return "\n".join(lines) + "\n" + tail
 
 
+def questionable_materials(materials: list[str]) -> list[str]:
+    """材料のうち、的外れなもの。
+
+    どのプロジェクトにも出てくる語（`場合`、`データ`）と、語の形をして
+    いないもの。**残しておくと、その語を含む案が出続ける。**
+    CLI・Web・doctor で同じ判定を使う。
+    """
+    return [
+        m for m in materials if m.lower() in STOPWORDS or clean_material(m) is None
+    ]
+
+
 def _check_storage(store: Store) -> Finding:
     path = Path(store.path).resolve()
     if any(str(path).startswith(root) for root in EPHEMERAL_ROOTS):
@@ -112,11 +124,7 @@ def _check_themes(store: Store) -> list[Finding]:
     out: list[Finding] = []
     for theme in active:
         materials = store.materials(theme.id)
-        junk = [
-            m
-            for m in materials
-            if m.lower() in STOPWORDS or clean_material(m) is None
-        ]
+        junk = questionable_materials(materials)
         if not materials:
             out.append(
                 Finding(

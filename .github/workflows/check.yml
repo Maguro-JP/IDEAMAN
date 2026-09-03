@@ -40,6 +40,25 @@ jobs:
       - name: 検査
         run: ruff check ideaman tests
 
+  browser:
+    # Web UI は主要な入口なのに、一度も動かしていなかった。JavaScript は
+    # テストが無いと、壊れても誰も気づかない（サーバは 200 を返し続ける）。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 依存とブラウザを入れる
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,ui]"
+          python -m playwright install --with-deps chromium
+      - name: ブラウザで触る
+        run: pytest -q tests/test_web_ui.py
+
   no-optional-deps:
     # 「キーが無くても、追加依存が無くても全機能が動く」という方針を守る。
     # 依存を入れた環境でしか通らないコードが混ざると、この方針は静かに崩れる。

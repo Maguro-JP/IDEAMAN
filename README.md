@@ -485,6 +485,16 @@ LLM は**オプション**であって前提ではない。
 .venv/bin/ruff check ideaman tests
 ```
 
+Web UI はブラウザで実際に触る（`tests/test_web_ui.py`）。JavaScript は
+テストが無いと、壊れても誰も気づきません——サーバは 200 を返し続けるので。
+
+```bash
+.venv/bin/pip install -e ".[ui]" && .venv/bin/playwright install chromium
+.venv/bin/pytest tests/test_web_ui.py
+```
+
+`playwright` かブラウザが無ければ、このテストだけ飛びます。
+
 テストは外部 API を叩かない（`conftest.py` がキーを外す）。
 
 Discord Bot と MCP サーバーも、外部に繋がずに**中身まで通す**。Bot は偽の

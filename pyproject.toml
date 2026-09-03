@@ -21,6 +21,8 @@ bot = ["discord.py>=2.3"]
 # 2.x で FastMCP が MCPServer に変わったため 1.x では動かない
 mcp = ["mcp>=2.0"]
 dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
+# ブラウザで実際に触るテスト。無ければそのテストだけ飛ぶ。
+ui = ["playwright>=1.40"]
 
 [project.scripts]
 ideaman = "ideaman.cli:main"

@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from . import harvest, service
+from .doctor import questionable_materials
 from .engine.lexicon import all_domains, default_lexicon
 from .store import Store
 
@@ -189,6 +190,20 @@ def get_store() -> Store:
     return app.state.store
 
 
+def _theme_dict(store: Store, theme) -> dict:
+    """テーマを Web に渡す形にする。
+
+    `questionable` は「どのプロジェクトにも出てくる語」。CLI と doctor は
+    警告するのに Web だけ黙っていたので、印を付けられるようにした。
+    """
+    materials = store.materials(theme.id)
+    return {
+        **theme.to_dict(),
+        "materials": materials,
+        "questionable": questionable_materials(materials),
+    }
+
+
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -242,7 +257,7 @@ def list_themes(store: Store = Depends(get_store)) -> dict:
     """登録済みのテーマと、その材料。"""
     return {
         "themes": [
-            {**theme.to_dict(), "materials": store.materials(theme.id)}
+            _theme_dict(store, theme)
             for theme in store.themes(active_only=False)
         ]
     }
@@ -263,7 +278,7 @@ def create_theme(body: ThemeRequest, store: Store = Depends(get_store)) -> dict:
             [c.term for c in found],
             weights=harvest.initial_weights(found),
         )
-    return {**theme.to_dict(), "materials": store.materials(theme.id)}
+    return _theme_dict(store, theme)
 
 
 @app.post("/api/themes/{theme_id}/materials/drop")
@@ -278,7 +293,7 @@ def drop_materials(
     store.drop_materials(theme_id, body.materials)
     theme = store.theme(theme_id)
     assert theme is not None
-    return {**theme.to_dict(), "materials": store.materials(theme_id)}
+    return _theme_dict(store, theme)
 
 
 @app.post("/api/themes/{theme_id}/active")
@@ -293,7 +308,7 @@ def set_theme_active(
     store.set_theme_active(theme_id, active)
     theme = store.theme(theme_id)
     assert theme is not None
-    return {**theme.to_dict(), "materials": store.materials(theme.id)}
+    return _theme_dict(store, theme)
 
 
 @app.get("/api/domains")
