@@ -294,6 +294,18 @@ class Store:
                 if name not in existing:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
+        # 言い方の部分は評価で動かさないことにしたが、**それまでに育った
+        # 重みは残ったままになる**。もう二度と動かないので、放っておくと
+        # 走り切った一文が永久に出続ける（実測で 4.64、上限 5.0）。
+        # 直したはずの振る舞いを、移行した DB に残さない。
+        placeholders = ",".join("?" * len(IdeaSeed.SIGNATURE_IGNORED_POOLS))
+        self.conn.execute(
+            f"UPDATE weights SET weight = 1.0 WHERE pool IN ({placeholders}) "
+            "AND weight != 1.0",
+            tuple(IdeaSeed.SIGNATURE_IGNORED_POOLS),
+        )
+        self.conn.commit()
+
     def close(self) -> None:
         """全スレッド分の接続を閉じる。
 

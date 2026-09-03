@@ -383,3 +383,36 @@ def test_an_old_thought_state_gains_the_mood_column(tmp_path):
         assert state.mood == ""
     finally:
         store.close()
+
+
+def test_learned_phrasing_weights_are_reset_on_open(tmp_path):
+    """言い方の重みが育ったままの DB を、開いたときに戻すこと。
+
+    評価で動かさない方針にしても、それまでに育った重みは残る。もう
+    二度と動かないので、放っておくと走り切った一文が永久に出続ける
+    （稼働中の DB で 4.64、上限 5.0）。移行した DB を、直したはずの
+    振る舞いのまま動かさない——休眠のときと同じ失敗をしない。
+    """
+    from ideaman.engine.combinator import IdeaSeed
+
+    path = tmp_path / "grown.db"
+    store = Store(path)
+    pool = next(iter(IdeaSeed.SIGNATURE_IGNORED_POOLS))
+    store.conn.execute(
+        "INSERT INTO weights (pool, term, weight) VALUES (?, ?, ?)",
+        (pool, "一番小さい例で手を動かす", 4.64),
+    )
+    store.conn.execute(
+        "INSERT INTO weights (pool, term, weight) VALUES ('concepts', '索引', 2.2)"
+    )
+    store.conn.commit()
+    store.close()
+
+    reopened = Store(path)
+    try:
+        weights = reopened.weights()
+        assert weights["一番小さい例で手を動かす"] == 1.0
+        # 発想の語のほうは育ったまま残す
+        assert weights["索引"] == 2.2
+    finally:
+        reopened.close()
