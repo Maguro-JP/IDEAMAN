@@ -164,19 +164,30 @@ def cmd_mechanisms(args: argparse.Namespace, store: Store) -> int:
                 return 1
             texts.append((args.subject or file.stem, file.read_text(errors="replace")))
 
+    from collections import Counter
+
     sentences = found = 0
+    why: Counter[str] = Counter()
     for subject, text in texts:
         pieces = mechanism.split_sentences(text)
         got = mechanism.extract(subject, text, limit=args.limit)
         sentences += len(pieces)
         found += len(got)
+        for piece in pieces:
+            reason = mechanism.reject_reason(piece)
+            if reason:
+                why[reason] += 1
         print(f"--- {subject}: 文 {len(pieces)} / 仕組み {len(got)}")
         for item in got:
             print(f"    {item.how}")
 
     rate = found / sentences if sentences else 0.0
     print(f"\n文 {sentences} / 仕組み {found}（{rate:.1%}）")
-    print("※ 通ったものを**全部読んで**、仕組みでないものが混ざっていないか見る。")
+    print("落ちた理由（多い順）:")
+    for reason, count in why.most_common():
+        print(f"    {count:6d}  {reason}")
+    print("\n通ったものを全部読んで、仕組みでないものが混ざっていないか見ます。")
+    print("取れ高が低いときは、落ちた理由の上位が絞りすぎていないか見ます。")
     return 0
 
 

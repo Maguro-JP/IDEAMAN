@@ -101,6 +101,16 @@ _ANAPHORA = re.compile(
     r"|同様|一方|他方|そのため|したがって|なお)"
 )
 
+#: 体言止め。述語が無いので「Xは、〜」に差し込むと文にならない。
+#: 実文で「作業量を増やすことではなく、プロダクトを良くすること」が通った。
+#: 構造の印も操作の動詞も持っているが、**やり方ではなく価値の表明**で、
+#: 差し込むと「改札は、〜こと」になって壊れる。
+_NOMINAL_END = re.compile(r"(?:こと|もの|ところ|ため|点|の|とき|場合|形)$")
+
+#: ラベル付きの断片。記録や表の1行は「見出し: 中身」の形になり、
+#: 文のように見えて文ではない（実文で lessons の記録が1件通った）。
+_LABELLED = re.compile(r"[:：]")
+
 #: 沿革。年月日や数字が多い文は仕組みではない。
 _DIGITS = re.compile(r"[0-9０-９]")
 MAX_DIGITS = 6
@@ -168,6 +178,37 @@ def split_sentences(text: str) -> list[str]:
     return out
 
 
+def reject_reason(sentence: str) -> str | None:
+    """落とす理由。通るなら None。
+
+    **どの条件で落ちたかを数えられるようにしておく。** 取れ高が低いとき、
+    絞りすぎている条件がどれかは、理由を数えないと分からない。新しい
+    採取元に当てるたびにここを見る。
+    """
+    body = _clean(sentence)
+    if len(body) < MIN_LEN:
+        return "短すぎる"
+    if len(body) > MAX_LEN:
+        return "長すぎる"
+    if body.count("、") > MAX_CLAUSES:
+        return "節が多い"
+    if _ANAPHORA.match(body):
+        return "指示語で始まる"
+    if _LABELLED.search(body):
+        return "ラベル付き"
+    if _NOMINAL_END.search(body):
+        return "体言止め"
+    if len(_DIGITS.findall(body)) > MAX_DIGITS:
+        return "数字が多い"
+    if _DEFINITION.search(body):
+        return "定義文"
+    if not _STRUCTURE.search(body):
+        return "構造の印が無い"
+    if not _OPERATION.search(body):
+        return "操作の動詞が無い"
+    return None
+
+
 def looks_like_mechanism(sentence: str) -> bool:
     """その一文が「やり方を名指ししている」か。
 
@@ -175,18 +216,7 @@ def looks_like_mechanism(sentence: str) -> bool:
     定義・指示語・沿革を落とす。取れ高は下がるが、混ざるほうが困る——
     ここを通った一文は、そのままユーザーの目に入る。
     """
-    body = _clean(sentence)
-    if not (MIN_LEN <= len(body) <= MAX_LEN):
-        return False
-    if body.count("、") > MAX_CLAUSES:
-        return False
-    if _ANAPHORA.match(body):
-        return False
-    if len(_DIGITS.findall(body)) > MAX_DIGITS:
-        return False
-    if _DEFINITION.search(body):
-        return False
-    return bool(_STRUCTURE.search(body) and _OPERATION.search(body))
+    return reject_reason(sentence) is None
 
 
 def extract(

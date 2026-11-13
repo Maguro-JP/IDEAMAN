@@ -103,3 +103,23 @@ def test_split_sentences_does_not_lose_the_last_sentence():
     """句点で終わらない文章でも最後の一文を落とさないこと。"""
     pieces = split_sentences("一つ目。二つ目")
     assert pieces == ["一つ目。", "二つ目"]
+
+
+#: 実際の文章に当てて通ってしまったもの。**形は満たしているが仕組みではない。**
+#: 手で作った例では出なかった——文体の違う実文に当てて初めて出た。
+REAL_FALSE_POSITIVES = [
+    (
+        "作業量を増やすことではなく、プロダクトを良くすること",
+        "体言止め。述語が無いので「Xは、〜」に差し込むと壊れる",
+    ),
+    (
+        "出したあとの直しが続いた判定の誤り:出す前の検査を手で選び、"
+        "出す内容をユーザーに見せずに進めた",
+        "ラベル付きの記録の断片。文のように見えて文ではない",
+    ),
+]
+
+
+@pytest.mark.parametrize("sentence,why", REAL_FALSE_POSITIVES)
+def test_real_false_positives_stay_dropped(sentence, why):
+    assert not looks_like_mechanism(sentence), f"{why}: {sentence}"
