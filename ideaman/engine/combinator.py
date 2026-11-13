@@ -51,6 +51,8 @@ SLOT_TO_POOL = {
     "probe": "probes",
     # material はプールから引かない。呼び出し側が渡すテーマの材料を使う。
     "material": "materials",
+    # 外の世界から採った仕組み。語ではなく一文を運ぶ（`mechanism_how`）。
+    "mechanism": "mechanisms",
 }
 
 
@@ -290,6 +292,11 @@ def combine(
         candidates = usable or [
             t for t in lexicon.templates if "material" not in t.needs
         ]
+    if not lexicon.pools.get("mechanisms"):
+        # 仕組みをまだ採っていないなら、それを使う型は埋められない。
+        candidates = [t for t in candidates if "mechanism" not in t.needs] or [
+            t for t in lexicon.templates if "mechanism" not in t.needs
+        ]
     template: Template = rng.choice(candidates)
 
     usable_pools = {
@@ -368,6 +375,12 @@ def combine(
         term_text = kept or _weighted_choice(rng, pool, weights).term
         slots[slot] = term_text
         used.append((pool_name, term_text))
+        if slot == "mechanism":
+            # 語（何の）だけでなく、一文（どうしているか）と出典を運ぶ。
+            # 出典は文には出さないが、種に残す——刺さったとき辿れるように。
+            chosen_term = next(t for t in pool if t.term == term_text)
+            slots["mechanism_how"] = chosen_term.how
+            slots["mechanism_source"] = chosen_term.source
 
     return IdeaSeed(
         template_id=template.id,

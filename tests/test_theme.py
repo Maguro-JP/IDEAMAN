@@ -147,7 +147,15 @@ def test_every_template_can_be_rendered():
             text = templates.render(idea_seed, lexicon)
             assert text and "{" not in text
             seen.add(idea_seed.template_id)
-    assert seen == {t.id for t in lexicon.templates}, "使われないテンプレートがある"
+    # 仕組みをまだ採っていないあいだ、それを使う型は選ばれないのが正しい
+    # （空のプールから引けば壊れる）。採ったあとの挙動は test_mechanism で見る。
+    has_mechanisms = bool(lexicon.pools.get("mechanisms"))
+    expected = {
+        t.id
+        for t in lexicon.templates
+        if has_mechanisms or "mechanism" not in t.needs
+    }
+    assert seen == expected, "使われないテンプレートがある"
 
 
 def test_probe_does_not_change_the_signature():

@@ -123,3 +123,102 @@ REAL_FALSE_POSITIVES = [
 @pytest.mark.parametrize("sentence,why", REAL_FALSE_POSITIVES)
 def test_real_false_positives_stay_dropped(sentence, why):
     assert not looks_like_mechanism(sentence), f"{why}: {sentence}"
+
+
+# --- 生成に繋ぐ ------------------------------------------------------------
+
+
+def _lexicon_with(mechanisms):
+    from dataclasses import replace
+
+    from ideaman.engine.lexicon import default_lexicon
+
+    base = default_lexicon()
+    return replace(base, pools={**base.pools, "mechanisms": tuple(mechanisms)})
+
+
+def _some_mechanisms():
+    from ideaman.engine.lexicon import Term
+
+    return [
+        Term(
+            term="改札",
+            how="通れなかった人を後ろに溜めるのではなく、脇へ出して個別に捌く",
+            source="https://example.invalid/kaisatsu",
+            domains=("city", "system"),
+        ),
+        Term(
+            term="トリアージ",
+            how="全員を順に診るのではなく、待てる人を先に選んで後回しにする",
+            source="https://example.invalid/triage",
+            domains=("rule",),
+        ),
+    ]
+
+
+def test_without_mechanisms_the_template_is_never_chosen():
+    """採取がまだなら、仕組みの型は選ばれないこと（空でも壊れない）。"""
+    from ideaman.engine.combinator import combine
+
+    lexicon = _lexicon_with([])
+    for seed in range(300):
+        idea = combine(lexicon=lexicon, materials=["通知", "在庫"], seed=seed)
+        assert idea.template_id != "mechanism_transfer"
+
+
+def test_the_idea_carries_the_sentence_and_its_source():
+    """語だけでなく一文が文に入り、出典が種に残ること。
+
+    裸の語だと「改札のやり方を持ち込む」で止まり、どのやり方かを読み手が
+    補うことになる。運ぶのは一文のほう。
+    """
+    from ideaman.engine import templates
+    from ideaman.engine.combinator import combine
+
+    lexicon = _lexicon_with(_some_mechanisms())
+    seen = 0
+    for seed in range(600):
+        idea = combine(lexicon=lexicon, materials=["通知", "在庫"], seed=seed)
+        if idea.template_id != "mechanism_transfer":
+            continue
+        seen += 1
+        text = templates.render(idea, lexicon)
+        assert idea.slots["mechanism_how"] in text
+        assert idea.slots["mechanism"] in text
+        assert idea.slots["material"] in text
+        assert idea.slots["mechanism_source"].startswith("https://")
+        assert idea.slots["mechanism_source"] not in text
+        for smell in ("。。", "、、", "のの", "（）"):
+            assert smell not in text, text
+        assert text.endswith("。")
+    assert seen > 10, "仕組みの型がほとんど選ばれていない"
+
+
+def test_mechanisms_survive_the_whole_pipeline(tmp_path):
+    """生成・保存・判定・取り出し・評価まで、仕組みの型が通ること。
+
+    プールを1つ足すと、名前で引いている所（重み、署名、選定、連鎖の
+    引き継ぎ）のどこかが落ちうる。組み合わせ単体では分からない。
+    """
+    from ideaman import service
+    from ideaman.store import Store
+
+    lexicon = _lexicon_with(_some_mechanisms())
+    store = Store(tmp_path / "m.db")
+    try:
+        theme = store.add_theme("t")
+        store.add_materials(theme.id, ["通知", "在庫", "評価", "連鎖"])
+        made = [
+            service.generate_idea(store, use_llm=False, lexicon=lexicon)
+            for _ in range(300)
+        ]
+        with_mechanism = [i for i in made if i.template_id == "mechanism_transfer"]
+        assert with_mechanism, "仕組みの型が一度も作られていない"
+
+        store.rate(with_mechanism[0].id, 1)
+        assert store.weights().get("改札", 1.0) >= 1.0
+
+        served = [service.receive_idea(store, use_llm=False) for _ in range(10)]
+        assert all(i.text for i in served)
+    finally:
+        store.close()

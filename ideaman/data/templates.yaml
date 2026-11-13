@@ -34,6 +34,14 @@ templates:
     needs: [material, concept_a, aspect, probe]
     text: "{concept_a}のやり方を{material}に持ち込む。見るのは{aspect}。まず{probe}。"
 
+  # 外の世界の仕組みを、そのまま持ってくる。borrow_from は「やり方」と
+  # 言うだけで中身を読み手に任せていた。こちらは一文を運ぶ。
+  # 一文が主語を含むかどうかは採取元しだいなので、主語は括弧で添える。
+  - id: mechanism_transfer
+    tone: proposal
+    needs: [material, mechanism]
+    text: "{mechanism_how}（{mechanism}）。{material}で同じことをするなら、何が要るか。"
+
   - id: constrained_rebuild
     tone: proposal
     needs: [material, constraint, aspect, probe]
