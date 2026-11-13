@@ -15,7 +15,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import diversity, doctor, harvest, service
+from . import diversity, doctor, harvest, mechanism, service
 from .notify import ConsoleNotifier, QueueNotifier
 from .store import Store, clean_material
 from .worker import DEFAULT_STOCK, TICK_SECONDS, Worker
@@ -142,6 +142,44 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
     return 0
 
 
+def cmd_mechanisms(args: argparse.Namespace, store: Store) -> int:
+    """文章から「仕組みの一文」を抜いて見せる。
+
+    取れ高と誤検出は**実際の文章に当てないと分からない**ので、測るための
+    入口をここに置く。`-` を渡せば標準入力から読むので、取ってきた記事を
+    そのまま流し込める:
+
+        curl -s "https://.../api/rest_v1/page/html/改札" | ideaman mechanisms -
+    """
+    import sys
+
+    texts: list[tuple[str, str]] = []
+    for path in args.paths:
+        if path == "-":
+            texts.append((args.subject or "標準入力", sys.stdin.read()))
+        else:
+            file = Path(path)
+            if not file.is_file():
+                print(f"{path} が読めません", file=sys.stderr)
+                return 1
+            texts.append((args.subject or file.stem, file.read_text(errors="replace")))
+
+    sentences = found = 0
+    for subject, text in texts:
+        pieces = mechanism.split_sentences(text)
+        got = mechanism.extract(subject, text, limit=args.limit)
+        sentences += len(pieces)
+        found += len(got)
+        print(f"--- {subject}: 文 {len(pieces)} / 仕組み {len(got)}")
+        for item in got:
+            print(f"    {item.how}")
+
+    rate = found / sentences if sentences else 0.0
+    print(f"\n文 {sentences} / 仕組み {found}（{rate:.1%}）")
+    print("※ 通ったものを**全部読んで**、仕組みでないものが混ざっていないか見る。")
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace, store: Store) -> int:
     """設定の健康診断。
 
@@ -235,6 +273,14 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[common],
     )
     p_doc.set_defaults(func=cmd_doctor)
+
+    p_mech = sub.add_parser(
+        "mechanisms", help="文章から「仕組みの一文」を抜く", parents=[common]
+    )
+    p_mech.add_argument("paths", nargs="+", help="ファイル。`-` で標準入力")
+    p_mech.add_argument("--subject", help="何の仕組みか（既定はファイル名）")
+    p_mech.add_argument("--limit", type=int, default=50, help="1文書から採る上限")
+    p_mech.set_defaults(func=cmd_mechanisms)
 
     p_div = sub.add_parser("diversity", help="リズムの健康度を見る", parents=[common])
     p_div.add_argument("--limit", type=int, default=500)
