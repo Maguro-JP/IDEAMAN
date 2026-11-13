@@ -68,3 +68,26 @@ def test_chain_of_an_unknown_idea_reads_as_a_sentence(db, capsys):
     assert main(["chain", "99999"]) == 1
     err = capsys.readouterr().err.strip()
     assert not err.startswith("'")
+
+
+def test_mechanisms_reads_a_file(db, capsys, tmp_path):
+    """`mechanisms` が文章を読んで、仕組みの一文だけを出すこと。
+
+    取れ高は実際の文章に当てないと分からないので、測る入口をコマンドに
+    しておく。ここでは入口が通ることだけを見る。
+    """
+    source = tmp_path / "図書館.txt"
+    source.write_text(
+        "図書館では、返却期限を厳しくするのではなく、"
+        "返しやすい場所を増やすことで回収を早める。\n"
+        "これは各地で行われている。\n"
+    )
+    assert main(["mechanisms", str(source)]) == 0
+    out = capsys.readouterr().out
+    assert "回収を早める" in out
+    assert "これは各地で" not in out
+
+
+def test_mechanisms_refuses_a_missing_file(db, capsys):
+    assert main(["mechanisms", "/no/such/file.txt"]) == 1
+    assert "読めません" in capsys.readouterr().err
