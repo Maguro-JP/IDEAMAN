@@ -31,7 +31,7 @@ ideaman = "ideaman.cli:main"
 include = ["ideaman*"]
 
 [tool.setuptools.package-data]
-ideaman = ["data/*.yaml", "static/*.html", "*.sql"]
+ideaman = ["data/*.yaml", "data/*.txt", "static/*.html", "*.sql"]
 
 [tool.ruff]
 line-length = 100
