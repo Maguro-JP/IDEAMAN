@@ -105,3 +105,30 @@ def test_the_last_resort_still_returns_something(store, monkeypatch):
     idea = service.receive_idea(store, use_llm=False)
     assert idea.text.strip()
     assert idea.verdict in ("chosen", "kept")
+
+
+def test_the_same_template_is_not_served_twice_in_a_row(tmp_path):
+    """在庫から続けて出したとき、同じ型が隣り合わないこと。
+
+    選定は連鎖ごとに型の重なりを見ているが、在庫から出す順はスコアしか
+    見ていなかった。10 回 × 20 件で測ると、隣り合って同じ型が平均 1.2 組
+    あった。乱数に依るので、何度か回して確かめる。
+    """
+    from ideaman import service
+    from ideaman.store import Store
+
+    for trial in range(3):
+        store = Store(tmp_path / f"serve{trial}.db")
+        try:
+            theme = store.add_theme("t")
+            store.add_materials(theme.id, ["通知", "在庫", "評価", "連鎖", "休眠", "配信"])
+            for _ in range(300):
+                service.generate_idea(store, use_llm=False)
+            served = []
+            while len(served) < 15 and store.stock_count() > 1:
+                served.append(store.take_ready().template_id)
+            pairs = list(zip(served, served[1:]))
+            assert pairs, "出せる在庫が足りない"
+            assert all(a != b for a, b in pairs), served
+        finally:
+            store.close()

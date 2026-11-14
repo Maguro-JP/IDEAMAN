@@ -51,6 +51,9 @@ DUPLICATE_FACTOR = 1.03
 MIN_WEIGHT = 0.2
 MAX_WEIGHT = 5.0
 
+#: 在庫から出すとき、スコアの上から何件までを見て型の重なりを避けるか。
+SERVE_LOOKAHEAD = 8
+
 
 #: 材料として受け付ける長さの上限。**文字種で分ける。**
 #: 日本語の語は短く（自動収集の実測で最大6文字）、英語の語は長い
@@ -804,12 +807,22 @@ class Store:
             params = (domain,)
         if self.themes(active_only=True):
             clause += " AND theme_id IN (SELECT id FROM themes WHERE active = 1)"
-        row = self.conn.execute(
-            f"SELECT * FROM ideas WHERE {clause} ORDER BY pick_score DESC, id LIMIT 1",
+        rows = self.conn.execute(
+            f"SELECT * FROM ideas WHERE {clause} "
+            f"ORDER BY pick_score DESC, id LIMIT {SERVE_LOOKAHEAD}",
             params,
-        ).fetchone()
-        if row is None:
+        ).fetchall()
+        if not rows:
             return None
+        # 直前に出したのと同じ型は、ほかに出せるものがあるうちは避ける。
+        # 選定は連鎖ごとに型の重なりを見ているが、**在庫から出す順**は
+        # スコアしか見ていなかったので、同じ型が隣り合うことがあった。
+        last = self.conn.execute(
+            "SELECT template_id FROM ideas WHERE state = 'seen' "
+            "ORDER BY seen_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+        avoid = last["template_id"] if last else None
+        row = next((r for r in rows if r["template_id"] != avoid), rows[0])
 
         self.conn.execute(
             "UPDATE ideas SET state = 'seen', seen_at = ? WHERE id = ?",
