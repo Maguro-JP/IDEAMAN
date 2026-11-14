@@ -83,7 +83,9 @@ def load_mechanisms(path: Path | None = None) -> tuple[Term, ...]:
     path = path or DATA_DIR / "mechanisms.yaml"
     if not path.is_file():
         return ()
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    # 一番上は `mechanisms:` のキー（lexicon.yaml の `concepts:` と同じ形）。
+    raw = raw.get("mechanisms") or []
     return tuple(
         Term(
             term=item["subject"],

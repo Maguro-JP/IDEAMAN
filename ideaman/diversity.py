@@ -95,10 +95,15 @@ def measure(store: Store, limit: int = 500) -> Health:
     health.kept = verdicts["kept"]
     health.unjudged = verdicts[None]
 
+    # 仕組み（`mechanisms`）は数えない。外から採って増やし続けるプールで、
+    # 12 ある型の 1 つからしか引かれない。分母に入れると被覆率が下がるだけで、
+    # 「少数の語に収束していないか」という元の問いが読めなくなる
+    # （128 件を足しただけで、10 日ぶんの被覆率が 4 割を切った）。
     term_counts: Counter = Counter()
     for row in rows:
-        for _, term in json.loads(row["seed_json"])["terms"]:
-            term_counts[term] += 1
+        for pool, term in json.loads(row["seed_json"])["terms"]:
+            if pool != "mechanisms":
+                term_counts[term] += 1
 
     lexicon = default_lexicon()
     # 材料も語彙のうち。分母に入れないと 100% を超える（実際 101% が出た）。
@@ -106,7 +111,9 @@ def measure(store: Store, limit: int = 500) -> Health:
         row["term"]
         for row in store.conn.execute("SELECT DISTINCT term FROM theme_terms")
     }
-    vocabulary = sum(len(terms) for terms in lexicon.pools.values()) + len(materials)
+    vocabulary = sum(
+        len(terms) for name, terms in lexicon.pools.items() if name != "mechanisms"
+    ) + len(materials)
     health.coverage = len(term_counts) / vocabulary if vocabulary else 0.0
     drawn = sum(term_counts.values())
     health.top_share = (
