@@ -51,6 +51,9 @@ DUPLICATE_FACTOR = 1.03
 MIN_WEIGHT = 0.2
 MAX_WEIGHT = 5.0
 
+#: 在庫から出すとき、スコアの上から何件までを見て型の重なりを避けるか。
+SERVE_LOOKAHEAD = 8
+
 
 #: 材料として受け付ける長さの上限。**文字種で分ける。**
 #: 日本語の語は短く（自動収集の実測で最大6文字）、英語の語は長い
@@ -127,6 +130,9 @@ class Idea:
     theme_id: int | None = None
     #: 文章化に使った文型。同じ骨格を続けて出さないための判定に使う。
     template_id: str = ""
+    #: 外の世界の仕組みを使ったとき、その出典の URL。刺さったら辿れるように。
+    #: （`source` は「誰が文にしたか」で、別のもの）
+    reference: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -145,6 +151,7 @@ class Idea:
             "verdict": self.verdict,
             "theme_id": self.theme_id,
             "template_id": self.template_id,
+            "reference": self.reference,
         }
 
 
@@ -183,9 +190,27 @@ def _row_to_theme(row: sqlite3.Row) -> Theme:
     )
 
 
+def _reference_of(row: sqlite3.Row) -> str:
+    """種に残してある出典を取り出す。https の URL だけを通す。
+
+    **画面でリンクにするので、形を確かめてから出す。** 種は自分で書いた
+    ものだが、DB は外から触れうる。`javascript:` がリンクになると困る。
+    """
+    # `in row` は列名ではなく値を見る（sqlite3.Row の仕様）。`.keys()` は外さない。
+    if "seed_json" not in row.keys() or not row["seed_json"]:  # noqa: SIM118
+        return ""
+    try:
+        slots = json.loads(row["seed_json"]).get("slots") or {}
+    except (ValueError, AttributeError):
+        return ""
+    url = slots.get("mechanism_source") or ""
+    return url if isinstance(url, str) and url.startswith("https://") else ""
+
+
 def _row_to_idea(row: sqlite3.Row) -> Idea:
     keys = row.keys()
     return Idea(
+        reference=_reference_of(row),
         id=row["id"],
         text=row["text"],
         domain=row["domain"],
@@ -782,12 +807,22 @@ class Store:
             params = (domain,)
         if self.themes(active_only=True):
             clause += " AND theme_id IN (SELECT id FROM themes WHERE active = 1)"
-        row = self.conn.execute(
-            f"SELECT * FROM ideas WHERE {clause} ORDER BY pick_score DESC, id LIMIT 1",
+        rows = self.conn.execute(
+            f"SELECT * FROM ideas WHERE {clause} "
+            f"ORDER BY pick_score DESC, id LIMIT {SERVE_LOOKAHEAD}",
             params,
-        ).fetchone()
-        if row is None:
+        ).fetchall()
+        if not rows:
             return None
+        # 直前に出したのと同じ型は、ほかに出せるものがあるうちは避ける。
+        # 選定は連鎖ごとに型の重なりを見ているが、**在庫から出す順**は
+        # スコアしか見ていなかったので、同じ型が隣り合うことがあった。
+        last = self.conn.execute(
+            "SELECT template_id FROM ideas WHERE state = 'seen' "
+            "ORDER BY seen_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+        avoid = last["template_id"] if last else None
+        row = next((r for r in rows if r["template_id"] != avoid), rows[0])
 
         self.conn.execute(
             "UPDATE ideas SET state = 'seen', seen_at = ? WHERE id = ?",

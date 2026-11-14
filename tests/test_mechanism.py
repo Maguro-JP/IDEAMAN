@@ -463,3 +463,58 @@ def test_saved_aspects_are_real_aspects_and_untagged_ones_are_not_drawn():
         assert item["aspect"] in nouns, item
     assert len(lexicon.pool("mechanisms")) == len(tagged)
     assert all(t.aspect for t in lexicon.pool("mechanisms"))
+
+
+def test_the_source_can_be_followed_from_the_idea(tmp_path):
+    """仕組みを使った案から、出典の URL が取り出せること。
+
+    刺さったとき自分で辿れないと、文中の一文は「誰かがそう言っている」で
+    終わる。Web・CLI・MCP が同じ値を見るので、Idea に載せる。
+    """
+    from ideaman import service
+    from ideaman.store import Store
+
+    lexicon = _lexicon_with(_some_mechanisms())
+    store = Store(tmp_path / "ref.db")
+    try:
+        theme = store.add_theme("t")
+        store.add_materials(theme.id, ["通知", "在庫", "評価"])
+        made = [
+            service.generate_idea(store, use_llm=False, lexicon=lexicon)
+            for _ in range(300)
+        ]
+        with_ref = [store.get(i.id) for i in made if i.template_id == "mechanism_transfer"]
+        assert with_ref
+        for idea in with_ref:
+            assert idea.reference.startswith("https://example.invalid/")
+            assert idea.to_dict()["reference"] == idea.reference
+        plain = [store.get(i.id) for i in made if i.template_id != "mechanism_transfer"]
+        assert all(i.reference == "" for i in plain)
+    finally:
+        store.close()
+
+
+def test_only_https_references_are_exposed(tmp_path):
+    """https 以外は出典として出さないこと。画面でリンクにするため。"""
+    import json
+
+    from ideaman.engine.combinator import combine
+    from ideaman.store import Store
+
+    store = Store(tmp_path / "bad.db")
+    try:
+        idea = store.save(combine(seed=1), "てすと", "engine")
+        seed = json.loads(
+            store.conn.execute(
+                "SELECT seed_json FROM ideas WHERE id = ?", (idea.id,)
+            ).fetchone()[0]
+        )
+        seed.setdefault("slots", {})["mechanism_source"] = "javascript:alert(1)"
+        store.conn.execute(
+            "UPDATE ideas SET seed_json = ? WHERE id = ?",
+            (json.dumps(seed, ensure_ascii=False), idea.id),
+        )
+        store.conn.commit()
+        assert store.get(idea.id).reference == ""
+    finally:
+        store.close()

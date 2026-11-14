@@ -44,6 +44,8 @@
     transition: opacity .9s ease;
   }
   #idea.visible { opacity: 1; }
+  #reference { display: block; margin: -.6rem 0 1.2rem; font-size: .8rem; color: var(--dim); }
+  #reference[hidden] { display: none; }
   #idea.thinking { opacity: .35; font-size: 1rem; letter-spacing: .4em; color: var(--dim); }
 
   #summon {
@@ -152,6 +154,7 @@
 
 <main>
   <div id="idea"></div>
+  <a id="reference" target="_blank" rel="noopener noreferrer" hidden>出典を見る</a>
   <button id="summon">受け取る</button>
   <div id="rate">
     <button class="vote" data-score="1" title="良い">&#128077;</button>
@@ -223,6 +226,15 @@ async function summon() {
       ideaEl.textContent = idea.text;
       ideaEl.classList.add("visible");
     });
+    // 外の世界の仕組みを使った案には出典がある。https だけをリンクにする。
+    const ref = el("reference");
+    if (typeof idea.reference === "string" && idea.reference.startsWith("https://")) {
+      ref.href = idea.reference;
+      ref.hidden = false;
+    } else {
+      ref.removeAttribute("href");
+      ref.hidden = true;
+    }
     noteEl.value = "";
     document.querySelectorAll(".vote").forEach(b => b.classList.remove("chosen"));
     rateEl.classList.add("visible");
