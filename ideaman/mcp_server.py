@@ -40,6 +40,8 @@ def _as_dict(idea: Idea) -> dict[str, Any]:
         "chain_id": idea.chain_id,
         "mode": idea.mode,
         "created_at": idea.created_at,
+        # 外の世界の仕組みを使った案には出典がある。辿って確かめられる。
+        "reference": idea.reference,
     }
 
 

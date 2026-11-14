@@ -32,6 +32,8 @@ def _configure_logging(verbose: bool) -> None:
 def cmd_idea(args: argparse.Namespace, store: Store) -> int:
     idea = service.receive_idea(store, domain=args.domain, use_llm=not args.no_llm)
     print(f"\n  {idea.text}\n")
+    if idea.reference:
+        print(f"  出典: {idea.reference}")
     theme = store.theme(idea.theme_id) if idea.theme_id else None
     label = theme.name if theme else "テーマなし"
     print(f"  #{idea.id}  {label}  在庫 {store.stock_count()}")

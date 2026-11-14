@@ -127,6 +127,9 @@ class Idea:
     theme_id: int | None = None
     #: 文章化に使った文型。同じ骨格を続けて出さないための判定に使う。
     template_id: str = ""
+    #: 外の世界の仕組みを使ったとき、その出典の URL。刺さったら辿れるように。
+    #: （`source` は「誰が文にしたか」で、別のもの）
+    reference: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -145,6 +148,7 @@ class Idea:
             "verdict": self.verdict,
             "theme_id": self.theme_id,
             "template_id": self.template_id,
+            "reference": self.reference,
         }
 
 
@@ -183,9 +187,27 @@ def _row_to_theme(row: sqlite3.Row) -> Theme:
     )
 
 
+def _reference_of(row: sqlite3.Row) -> str:
+    """種に残してある出典を取り出す。https の URL だけを通す。
+
+    **画面でリンクにするので、形を確かめてから出す。** 種は自分で書いた
+    ものだが、DB は外から触れうる。`javascript:` がリンクになると困る。
+    """
+    # `in row` は列名ではなく値を見る（sqlite3.Row の仕様）。`.keys()` は外さない。
+    if "seed_json" not in row.keys() or not row["seed_json"]:  # noqa: SIM118
+        return ""
+    try:
+        slots = json.loads(row["seed_json"]).get("slots") or {}
+    except (ValueError, AttributeError):
+        return ""
+    url = slots.get("mechanism_source") or ""
+    return url if isinstance(url, str) and url.startswith("https://") else ""
+
+
 def _row_to_idea(row: sqlite3.Row) -> Idea:
     keys = row.keys()
     return Idea(
+        reference=_reference_of(row),
         id=row["id"],
         text=row["text"],
         domain=row["domain"],
