@@ -325,12 +325,14 @@ def _some_mechanisms():
             term="改札",
             how="通れなかった人を後ろに溜めるのではなく、脇へ出して個別に捌く",
             source="https://example.invalid/kaisatsu",
+            aspect="例外の扱い",
             domains=("city", "system"),
         ),
         Term(
             term="トリアージ",
             how="全員を順に診るのではなく、待てる人を先に選んで後回しにする",
             source="https://example.invalid/triage",
+            aspect="順番",
             domains=("rule",),
         ),
     ]
@@ -366,6 +368,7 @@ def test_the_idea_carries_the_sentence_and_its_source():
         assert idea.slots["mechanism_how"] in text
         assert idea.slots["mechanism"] in text
         assert idea.slots["material"] in text
+        assert idea.slots["mechanism_aspect"] in text
         assert idea.slots["mechanism_source"].startswith("https://")
         assert idea.slots["mechanism_source"] not in text
         for smell in ("。。", "、、", "のの", "（）"):
@@ -418,7 +421,8 @@ def test_saved_mechanisms_have_the_fields_templates_need():
     lexicon = yaml.safe_load((DATA / "lexicon.yaml").read_text())
     known = {tag for item in lexicon["concepts"] for tag in item["domains"]}
     for item in saved:
-        assert set(item) == {"subject", "how", "source", "domains"}, item
+        # `aspect` は付いていないものもある（付いていない一文は引かれない）。
+        assert set(item) - {"aspect"} == {"subject", "how", "source", "domains"}, item
         assert item["subject"] and item["how"], item
         assert item["source"].startswith("https://ja.wikipedia.org/wiki/"), item
         assert 1 <= len(item["domains"]) <= 2, item
@@ -440,3 +444,22 @@ def test_every_saved_mechanism_still_passes_the_extractor():
     """
     for item in _saved_mechanisms():
         assert looks_like_mechanism(item["how"]), item["how"]
+
+
+def test_saved_aspects_are_real_aspects_and_untagged_ones_are_not_drawn():
+    """付けた側面が語彙にある名詞の側面であること、付いていないものは引かれないこと。
+
+    側面は読んで付けた判定で、形では決めていない。語彙に無い語を書くと
+    「通知の〇〇で」が意味を成さなくなるので、ここで止める。
+    """
+    from ideaman.engine.lexicon import default_lexicon
+
+    lexicon = default_lexicon()
+    nouns = {t.term for t in lexicon.pool("aspects") if t.kind == "noun"}
+    saved = _saved_mechanisms()
+    tagged = [m for m in saved if m.get("aspect")]
+    assert tagged, "側面の付いた一文が無い"
+    for item in tagged:
+        assert item["aspect"] in nouns, item
+    assert len(lexicon.pool("mechanisms")) == len(tagged)
+    assert all(t.aspect for t in lexicon.pool("mechanisms"))

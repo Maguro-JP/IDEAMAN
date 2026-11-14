@@ -47,6 +47,8 @@ class Term:
     #: 裸の語（改札）ではなく仕組み（脇へ出して個別に捌く）を運ぶための場所。
     how: str = ""
     source: str = ""
+    #: その仕組みが、どの側面の話か。読んで付けた判定（形では決められない）。
+    aspect: str = ""
 
 
 @dataclass(frozen=True)
@@ -92,9 +94,13 @@ def load_mechanisms(path: Path | None = None) -> tuple[Term, ...]:
             domains=tuple(item.get("domains") or ()),
             how=str(item["how"]).strip().rstrip("。"),
             source=item.get("source", ""),
+            aspect=item.get("aspect", ""),
         )
         for item in raw
-        if item.get("subject") and item.get("how")
+        # **側面の付いていない一文は引かない。** 物の構造の話（閘門の浮函、
+        # 滑車）は材料に移しにくく、的も名指しできない。ファイルには残す——
+        # 読み直して付ければ引かれるようになる。
+        if item.get("subject") and item.get("how") and item.get("aspect")
     )
 
 

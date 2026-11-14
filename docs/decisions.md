@@ -11,3 +11,4 @@
 | 2026-11-14 | `mechanisms.yaml` は一番上を `mechanisms:` のキーにする | `lexicon.yaml` の `concepts:` と同じ形。選ばなかった案: 一番上を配列にする | `ideaman/data/mechanisms.yaml` |
 | 2026-11-14 | `mechanisms.yaml` に入れるのは、抽出器を通り、かつ人が読んで選んだ文だけ。今の抽出器を通らない文は置かない | 抽出器だけでは 8 割しか当たらない。通らない文が残ると前提が崩れるので、テストで固定した | `tests/test_mechanism.py` |
 | 2026-11-14 | 分野タグは `lexicon.yaml` の concepts で使っている語だけ | 遠さの計算を同じ語彙でやるため。`sound` `art` などは concepts に無いので使わない | `tests/test_mechanism.py` |
+| 2026-11-14 | 仕組みの一文に `aspect`（どの側面の話か）を読んで付け、付いていない一文は引かない。128 件中 57 件に付けた（AI の判断） | 形では側面を決められなかった（手掛かりの語が当たるのは 128 件中 40 件ほどで、大半が「防ぐ」）。物の構造の話は材料に移しにくい。選ばなかった案: 語で機械的に付ける、全部を引く | `ideaman/data/mechanisms.yaml` の `aspect`、`load_mechanisms` |

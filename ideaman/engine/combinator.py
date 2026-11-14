@@ -381,6 +381,9 @@ def combine(
             chosen_term = next(t for t in pool if t.term == term_text)
             slots["mechanism_how"] = chosen_term.how
             slots["mechanism_source"] = chosen_term.source
+            # どの側面の話かを名指しする。的を言わない型は読み手に全部の
+            # 仕事を投げる（CLAUDE.md「弱い型には側面がない」）。
+            slots["mechanism_aspect"] = chosen_term.aspect
 
     return IdeaSeed(
         template_id=template.id,

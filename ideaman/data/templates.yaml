@@ -40,7 +40,7 @@ templates:
   - id: mechanism_transfer
     tone: proposal
     needs: [material, mechanism]
-    text: "{mechanism_how}（{mechanism}）。{material}で同じことをするなら、何が要るか。"
+    text: "{mechanism_how}（{mechanism}）。{material}の{mechanism_aspect}で同じことをするなら、何が要るか。"
 
   - id: constrained_rebuild
     tone: proposal

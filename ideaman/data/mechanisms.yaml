@@ -10,6 +10,9 @@
 # - subject: 何の仕組みか（記事の題）
 # - how:     何をどうしているか
 # - source:  記事の URL
+# - aspect:  どの側面の話か（lexicon.yaml の aspects の語）。**読んで付けた判定**で、
+#            形では決めていない。付いていない一文は、物の構造の話などで、
+#            ほかの題材に移しにくいと見たもの。いまは引かれない
 # - domains: 分野タグ。lexicon.yaml の concepts で使っている語から選ぶ
 mechanisms:
   - subject: "ごみ収集車"
@@ -27,6 +30,7 @@ mechanisms:
   - subject: "エレベーター"
     how: "かごドアの端部には挟まれによる事故を防ぐため、セーフティシューと呼ばれる大きな棒状の安全スイッチが取り付けられている"
     source: "https://ja.wikipedia.org/wiki/エレベーター"
+    aspect: 失敗したときの挙動
     domains: [city, physical]
   - subject: "コンバインハーベスター"
     how: "変速機の入力軸上の可変プーリーの幅を減少させることによって、ベルトはプーリーの溝のより外周に移動する"
@@ -55,6 +59,7 @@ mechanisms:
   - subject: "ピアノ"
     how: "演奏者から見て右側が開くため、演奏会場では客席に向かって音を発するように、客席から向かって左側に鍵盤が置かれる"
     source: "https://ja.wikipedia.org/wiki/ピアノ"
+    aspect: 見た目
     domains: [physical, creation]
   - subject: "ピアノ"
     how: "ピアノで一切発音せず、ペダルの踏み込み具合や鍵を無音で押し込むことによって他の楽器に共鳴させる奏法もある"
@@ -67,14 +72,17 @@ mechanisms:
   - subject: "ラウンドアバウト"
     how: "車両がショートカットして走行することを防ぐためわずかな段差を設ける"
     source: "https://ja.wikipedia.org/wiki/ラウンドアバウト"
+    aspect: 境界
     domains: [city, rule]
   - subject: "ラウンドアバウト"
     how: "錯綜する交錯箇所を減らすことで交差点内での衝突リスクを低下させたり速度抑制による重大事故の減少を目的とする"
     source: "https://ja.wikipedia.org/wiki/ラウンドアバウト"
+    aspect: 失敗したときの挙動
     domains: [city, rule]
   - subject: "ラウンドアバウト"
     how: "自転車道を分けることで環道の幅員を削減できるほか、横断歩道の手前では躊躇なく速度を落とすことができる"
     source: "https://ja.wikipedia.org/wiki/ラウンドアバウト"
+    aspect: 境界
     domains: [city, rule]
   - subject: "人工透析"
     how: "血液の体外への循環中に血液が凝固することを防ぐ目的で、抗凝固薬を持続注入する"
@@ -83,6 +91,7 @@ mechanisms:
   - subject: "冬眠"
     how: "カルシウムイオンチャネルは直ちに閉じてイオンが過剰に流入しないようにしている"
     source: "https://ja.wikipedia.org/wiki/冬眠"
+    aspect: 失敗したときの挙動
     domains: [nature, time]
   - subject: "冷蔵庫"
     how: "飲食店の厨房用では、食材の乾燥を防ぐために、通常の冷蔵庫ではなく恒温高湿庫を低温状態に設定して用いることもある"
@@ -91,10 +100,12 @@ mechanisms:
   - subject: "冷蔵庫"
     how: "新品および使用中の冷蔵庫を車に積んで運ぶ場合、圧縮機の故障を防ぐため「縦積みする」よう指示されている"
     source: "https://ja.wikipedia.org/wiki/冷蔵庫"
+    aspect: やり直しのきかない部分
     domains: [daily, physical]
   - subject: "冷蔵庫"
     how: "使用済み冷蔵庫を廃棄する場合、庫内への幼児閉じ込め事故を防ぐためドアパッキンを必ず外しておく"
     source: "https://ja.wikipedia.org/wiki/冷蔵庫"
+    aspect: 終わり方
     domains: [daily, physical]
   - subject: "冷蔵庫"
     how: "スターリングエンジンを外部の動力で回転させることで温度差を生じさせる"
@@ -103,6 +114,7 @@ mechanisms:
   - subject: "回転寿司"
     how: "注文した品はどの客のものか分かるように、席を示す色や番号が表示された器に載せてレーン上を運ばれてくる"
     source: "https://ja.wikipedia.org/wiki/回転寿司"
+    aspect: 名前
     domains: [food, system]
   - subject: "堆肥"
     how: "堆肥の分解者が増えることで生物相が豊かになり害虫や有害な病原菌の繁殖を抑える"
@@ -115,6 +127,7 @@ mechanisms:
   - subject: "将棋"
     how: "成駒は元の駒を裏返して配置することで表示される"
     source: "https://ja.wikipedia.org/wiki/将棋"
+    aspect: 見た目
     domains: [play, rule]
   - subject: "尺八"
     how: "現行の尺八の管の内部は、管の内側に残った節を削り取り、漆の地を塗り重ねることで管の内径を精密に調整する"
@@ -127,18 +140,22 @@ mechanisms:
   - subject: "手術"
     how: "外来菌による感染を防ぐため、手術は無菌の領域を形成して行われる"
     source: "https://ja.wikipedia.org/wiki/手術"
+    aspect: 境界
     domains: [rule, physical]
   - subject: "持ち時間"
     how: "1890年代ごろからは時計を改造したチェスクロックが考案され、対局者がボタンを押すことで外部の干渉を無くすことができた"
     source: "https://ja.wikipedia.org/wiki/持ち時間"
+    aspect: 境界
     domains: [time, play]
   - subject: "時計"
     how: "目盛りの線を細かく刻むことで太陽を漠然と目視するよりも、時刻を細かく把握できるようになった"
     source: "https://ja.wikipedia.org/wiki/時計"
+    aspect: 単位
     domains: [time, physical]
   - subject: "時計"
     how: "実際の月相は、月を楕円弧状に光と影の部分に分けるが、「ムーンフェイズ」は月食と同様に円を円で隠すことで月相を表現している"
     source: "https://ja.wikipedia.org/wiki/時計"
+    aspect: 見た目
     domains: [time, physical]
   - subject: "浄水場"
     how: "原水には砂や土が含まれるため、沈砂池に導いて緩やかな流れの途中で沈殿させることでそれらを取り除く"
@@ -147,10 +164,12 @@ mechanisms:
   - subject: "消化"
     how: "中には、自身には消化できないものを分解するために、微生物などを消化管内に共生させている動物もいる"
     source: "https://ja.wikipedia.org/wiki/消化"
+    aspect: 手数
     domains: [nature, physical]
   - subject: "消防"
     how: "アウグストゥスの消防の人員は火事を知らせるために、動くと音が出る金具が付いた制服を着ていた"
     source: "https://ja.wikipedia.org/wiki/消防"
+    aspect: 手数
     domains: [city, system]
   - subject: "灌漑"
     how: "パイプ内に藻類が繁殖するのを防ぎ、紫外線によるポリエチレンの劣化を防ぐため、パイプを黒にしたり地面に埋めたりする"
@@ -159,6 +178,7 @@ mechanisms:
   - subject: "灌漑"
     how: "点滴灌漑では、適当な間隔で若干水を多めに流すことで蓄積した塩分を流すという方法がよく使われる"
     source: "https://ja.wikipedia.org/wiki/灌漑"
+    aspect: 頻度
     domains: [nature, system]
   - subject: "灯台"
     how: "大型の灯台では閃光レンズが使用されており、レンズを回転させることでレンズの中心方向に発生した閃光を回転させている"
@@ -167,6 +187,7 @@ mechanisms:
   - subject: "緊急地震速報"
     how: "「緊急地震速報」は、まず地震が発生したことをいち早く知らせるための第1報を優先的に発表する"
     source: "https://ja.wikipedia.org/wiki/緊急地震速報"
+    aspect: 順番
     domains: [time, information]
   - subject: "蒸留"
     how: "蒸発面と凝縮面との距離を、蒸気分子の平均自由行程以下に接近させることで蒸留を行う、分子蒸留と呼ばれる方法がある"
@@ -191,6 +212,7 @@ mechanisms:
   - subject: "金庫"
     how: "西洋の金庫では破錠を防ぐために錠を厚い鉄の壁の内部に収めているものが多い"
     source: "https://ja.wikipedia.org/wiki/金庫"
+    aspect: 境界
     domains: [trust, physical]
   - subject: "閘門"
     how: "水閘に用いられる浮函は、側壁または渠底に付けた溝または戸当たりに接続して沈めることで水密にしている"
@@ -203,6 +225,7 @@ mechanisms:
   - subject: "閘門"
     how: "船の動揺を抑えるために、閘室の側面に多数分散させて閘渠の口を設けることで、水の勢いを分散させるように設計することもある"
     source: "https://ja.wikipedia.org/wiki/閘門"
+    aspect: 入り口
     domains: [space, system]
   - subject: "閘門"
     how: "閘門扉として引揚扉を用いた閘門では、引揚扉をわずかに開けることで給排水するものがある"
@@ -215,6 +238,7 @@ mechanisms:
   - subject: "閘門"
     how: "閘室の側壁を共用にすることで建設費を抑えることができる"
     source: "https://ja.wikipedia.org/wiki/閘門"
+    aspect: 一番お金がかかっている部分
     domains: [space, system]
   - subject: "閘門"
     how: "古代の人々は、ダムを建設して川の水位を上げることで、より大きな船を運航できるようになることを発見した"
@@ -239,6 +263,7 @@ mechanisms:
   - subject: "オルゴール"
     how: "カードを変えることで演奏する曲を変えられる"
     source: "https://ja.wikipedia.org/wiki/オルゴール"
+    aspect: 単位
     domains: [physical, creation]
   - subject: "クラッチ"
     how: "レバーを握るとクラッチが切れ、レバーの操作を途中で止めることで半クラッチ状態にできる"
@@ -247,6 +272,7 @@ mechanisms:
   - subject: "コーヒー"
     how: "インスタントコーヒーなど工業的生産の場では、香味等の品質を保つため8つ以上のタイプの豆が混合される"
     source: "https://ja.wikipedia.org/wiki/コーヒー"
+    aspect: 例外の扱い
     domains: [food, daily]
   - subject: "コーヒー"
     how: "湯の温度を上げることで苦味が、また温度を下げることで甘みが増えるなど、風味を調節できる"
@@ -255,14 +281,17 @@ mechanisms:
   - subject: "シートベルト"
     how: "引き出したベルトを任意の位置で停止させることで自動的にロックする"
     source: "https://ja.wikipedia.org/wiki/シートベルト"
+    aspect: 失敗したときの挙動
     domains: [physical, rule]
   - subject: "シートベルト"
     how: "単にベルトをロックするのではなく、積極的に巻き取って乗員を座席に固定することを目的とする"
     source: "https://ja.wikipedia.org/wiki/シートベルト"
+    aspect: 失敗したときの挙動
     domains: [physical, rule]
   - subject: "トランペット"
     how: "異なる種類の弱音器に付け換えることによって音色を瞬時に変化させることもできる"
     source: "https://ja.wikipedia.org/wiki/トランペット"
+    aspect: 待ち時間
     domains: [physical, creation]
   - subject: "トランペット"
     how: "4番バルブがある楽器では、これを押すことで全音2つ分音高が低くなる"
@@ -275,6 +304,7 @@ mechanisms:
   - subject: "ビール"
     how: "麦芽の製法は種子に水と空気を与えて発芽させ、発酵過程に入る前に麦芽の成長を止めるため窯内で乾燥焙煎させる"
     source: "https://ja.wikipedia.org/wiki/ビール"
+    aspect: 終わり方
     domains: [food, time]
   - subject: "ビール"
     how: "混濁の原因となるタンパク質は、温度を+1〜-1℃程度に下げることにより析出し、一部の酵母とともに沈降する"
@@ -287,6 +317,7 @@ mechanisms:
   - subject: "ボールペン"
     how: "ノック式はドライアップしにくいインクの配合や、ばねでボールを押し出し非筆記時に隙間を封じることでドライアップを防いでいる"
     source: "https://ja.wikipedia.org/wiki/ボールペン"
+    aspect: 終わり方
     domains: [daily, physical]
   - subject: "ボールペン"
     how: "油性7水性3の割合で混合した状態で安定させることにより、水性の滑らかな書き味と、油性の鮮やかで濃い筆記線を両立している"
@@ -295,14 +326,17 @@ mechanisms:
   - subject: "マークシート"
     how: "読み取り時の光の乱反射による誤読を防ぐために白色度の低い紙が用いられる"
     source: "https://ja.wikipedia.org/wiki/マークシート"
+    aspect: 失敗したときの挙動
     domains: [information, rule]
   - subject: "ミシン"
     how: "一つ前の縫い目のループの中に次の縫い目のループを通すことにより、糸の抜けを阻止する"
     source: "https://ja.wikipedia.org/wiki/ミシン"
+    aspect: 順番
     domains: [physical, creation]
   - subject: "ヴァイオリン"
     how: "経年の歪みを防ぐため、予め長期間天然乾燥されるが、現在では乾燥釜をつかった強制乾燥によるKW材を使用する場合も多い"
     source: "https://ja.wikipedia.org/wiki/ヴァイオリン"
+    aspect: 初期状態
     domains: [creation, physical]
   - subject: "人工呼吸器"
     how: "ベローズの上にある可動式の重りをスライドさせることで、膨張圧を変化させることができた"
@@ -311,26 +345,32 @@ mechanisms:
   - subject: "人工呼吸器"
     how: "駆動部をなくすことで、性能の信頼性を高め、メンテナンスを最小限に抑えることができた"
     source: "https://ja.wikipedia.org/wiki/人工呼吸器"
+    aspect: 手数
     domains: [physical, system]
   - subject: "人工呼吸器"
     how: "可動部を減らすことで製造コストを削減し、耐久性も向上させた"
     source: "https://ja.wikipedia.org/wiki/人工呼吸器"
+    aspect: 一番お金がかかっている部分
     domains: [physical, system]
   - subject: "体温計"
     how: "実測・予測を切り替えたり、予測式としての計測終了の合図があった後も、計測を継続することで精度を向上させる機種もある"
     source: "https://ja.wikipedia.org/wiki/体温計"
+    aspect: 終わり方
     domains: [daily, information]
   - subject: "体温計"
     how: "消毒用薬剤の不足するような場所では、接触による感染症等を防ぐために5cmほど離れた場所から測定することもある"
     source: "https://ja.wikipedia.org/wiki/体温計"
+    aspect: 境界
     domains: [daily, information]
   - subject: "印鑑"
     how: "個人・官職・団体の印として公私の文書に押して特有の痕跡を残すことにより、その責任や権威を証明する事に用いる"
     source: "https://ja.wikipedia.org/wiki/印鑑"
+    aspect: 記録の残り方
     domains: [identity, trust]
   - subject: "印鑑"
     how: "古くは、印影と印章の所有者を一致させるために、印影を登録させた"
     source: "https://ja.wikipedia.org/wiki/印鑑"
+    aspect: 記録の残り方
     domains: [identity, trust]
   - subject: "差動装置"
     how: "二つのわずかにピッチの異なるネジを同時に回転させることにより、その差だけ動かすことができる"
@@ -339,6 +379,7 @@ mechanisms:
   - subject: "心肺蘇生法"
     how: "二次災害を防ぐため、まず周囲の安全を確認する"
     source: "https://ja.wikipedia.org/wiki/心肺蘇生法"
+    aspect: 順番
     domains: [rule, physical]
   - subject: "日本酒"
     how: "吟醸造りでは、もろみを絞る直前に醸造アルコールを添加することで、芳香成分を酒粕側から日本酒側に移行させることができる"
@@ -355,18 +396,22 @@ mechanisms:
   - subject: "滑車"
     how: "フランジと溝を持たないドラム型プーリーの場合、平ベルトをその中央に保つためにやや凸面にしておくことが多い"
     source: "https://ja.wikipedia.org/wiki/滑車"
+    aspect: 初期状態
     domains: [physical, structure]
   - subject: "火消"
     how: "江戸市中の再建では、大名屋敷・旗本屋敷や寺社の一部を郊外に移転させ、延焼を防ぐための火除地を確保した"
     source: "https://ja.wikipedia.org/wiki/火消"
+    aspect: 境界
     domains: [city, social]
   - subject: "献血"
     how: "成分献血は回復に時間を要する赤血球を献血者に戻すため、全血献血に比べてより多くの血小板や血漿を採血可能となる"
     source: "https://ja.wikipedia.org/wiki/献血"
+    aspect: 一番遅いところ
     domains: [trust, social]
   - subject: "献血"
     how: "エイズ検査目的の献血を防ぐためにHIVは異常が認められても通知されない"
     source: "https://ja.wikipedia.org/wiki/献血"
+    aspect: 例外の扱い
     domains: [trust, social]
   - subject: "石垣"
     how: "自然石や、粗割り石を加工せずにそのまま積み上げる方法で、見た目は雑な感じになる"
@@ -387,18 +432,22 @@ mechanisms:
   - subject: "聴診器"
     how: "皮膚に接触する際に冷たくないように、ゴムのリングが金属製の円形部を囲んでいるものが多い"
     source: "https://ja.wikipedia.org/wiki/聴診器"
+    aspect: 入り口
     domains: [physical, information]
   - subject: "聴診器"
     how: "チェストピースを押さえる圧を調節することで、高調音と低調音を聞き分ける機能をもたせたダイアフラムもある"
     source: "https://ja.wikipedia.org/wiki/聴診器"
+    aspect: 手数
     domains: [physical, information]
   - subject: "自動列車停止装置"
     how: "国鉄ATSのB型と同様にレールに常に電流を流し、電流を切ることによって信号を送っている"
     source: "https://ja.wikipedia.org/wiki/自動列車停止装置"
+    aspect: 失敗したときの挙動
     domains: [system, rule]
   - subject: "自動販売機"
     how: "新聞の一面を陳列するために、一部だけはケースの透明な窓を内側から覆う形で置いてあり、最後の購入者はその新聞を取り出す"
     source: "https://ja.wikipedia.org/wiki/自動販売機"
+    aspect: 終わり方
     domains: [economy, city]
   - subject: "自動販売機"
     how: "1つの円盤上には6〜8程度の商品が並べられ、回転ボタンを押すことにより商品が循環する仕組みとなっている"
@@ -407,10 +456,12 @@ mechanisms:
   - subject: "自転車"
     how: "クランクを逆転させることで作動するコースターブレーキと呼ばれるものも一部で採用されている"
     source: "https://ja.wikipedia.org/wiki/自転車"
+    aspect: 手数
     domains: [physical, daily]
   - subject: "落語"
     how: "視線や体勢の角度を変えることで、登場人物の間の遠近や位置関係を表現することもできる"
     source: "https://ja.wikipedia.org/wiki/落語"
+    aspect: 見た目
     domains: [culture, communication]
   - subject: "運河"
     how: "インクラインからさらに進んで、船を水に浮かべた箱をエレベータのように垂直に昇降させることで水位差を吸収する"
@@ -419,6 +470,7 @@ mechanisms:
   - subject: "道の駅"
     how: "無料区間の高速道路/高規格道路のインターチェンジに隣接して設置することで、SA/PAの役割も同時に果たす"
     source: "https://ja.wikipedia.org/wiki/道の駅"
+    aspect: 入り口
     domains: [city, space]
   - subject: "電子レンジ"
     how: "マイクロ波を食品などに照射して、極性をもつ水分子に直接エネルギーを与え、分子を振動・回転させることで温度を上げる"
@@ -443,10 +495,12 @@ mechanisms:
   - subject: "鷹狩"
     how: "古代には専門職としての鷹匠が生まれるとともに、獲物の減少を防ぐため禁野という一般の出入りを制限する禁猟区が設けられた"
     source: "https://ja.wikipedia.org/wiki/鷹狩"
+    aspect: 境界
     domains: [nature, rule]
   - subject: "ICカード乗車券"
     how: "不正乗車を防ぐため、自動改札機でカードの入場処理と出場処理を交互に行わなければ改札機を通過できなくしている事業者もある"
     source: "https://ja.wikipedia.org/wiki/ICカード乗車券"
+    aspect: 順番
     domains: [system, rule]
   - subject: "めっき"
     how: "導電性の素材はめっき液に浸けて陰極につなぐことによってめっきする"
@@ -463,10 +517,12 @@ mechanisms:
   - subject: "トイレ"
     how: "ドアも完全に視線を遮るものではなく、足の部分は外部から見える形式のものが多い"
     source: "https://ja.wikipedia.org/wiki/トイレ"
+    aspect: 見た目
     domains: [daily, space]
   - subject: "トランプ"
     how: "上下逆に持ったときにひっくり返す手間を省くため、絵札には上下に2つの半身像が描かれていることが多い"
     source: "https://ja.wikipedia.org/wiki/トランプ"
+    aspect: 手数
     domains: [play, structure]
   - subject: "ペットボトル"
     how: "酸素による酸化を防ぐため、飲料には酸化防止剤としてビタミンCなどが添加される"
@@ -495,6 +551,7 @@ mechanisms:
   - subject: "歌舞伎"
     how: "手前側と向こう側に2つの場面の装置を仕込んでおき、回転させることによって素早く場面転換ができる"
     source: "https://ja.wikipedia.org/wiki/歌舞伎"
+    aspect: 待ち時間
     domains: [culture, space]
   - subject: "汲み取り式便所"
     how: "臭突の先端には雨水が便槽に入るのを防ぐための傘が付けられるが、ほとんどの場合は風力式もしくは電動式の換気扇が付けられる"
@@ -503,6 +560,7 @@ mechanisms:
   - subject: "洗濯機"
     how: "最近では、液体を封入した環を使い、それを脱水槽と同時に回すことで全体としてバランスが取れるようにしていることが多い"
     source: "https://ja.wikipedia.org/wiki/洗濯機"
+    aspect: 例外の扱い
     domains: [daily, physical]
   - subject: "洗濯機"
     how: "洗濯物と水を球形の金属製洗濯槽に密閉して人力で回転させることで攪拌し洗浄する"
@@ -519,8 +577,10 @@ mechanisms:
   - subject: "能"
     how: "能の作者は典拠の筋をそのまま再現するのではなく、語る人物や描く時間を選び直して一曲を構成した"
     source: "https://ja.wikipedia.org/wiki/能"
+    aspect: 説明が一番長くなる部分
     domains: [culture, creation]
   - subject: "花札"
     how: "不正を疑われないように、ひとりで札を混ぜて配ったりせず、3人の分担作業で行うことを推奨する"
     source: "https://ja.wikipedia.org/wiki/花札"
+    aspect: 手数
     domains: [play, trust]
