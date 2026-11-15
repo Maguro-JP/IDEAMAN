@@ -9,10 +9,6 @@
           },
           {
             "type": "command",
-            "command": "cat .claude/skills/work-style/SKILL.md 2>/dev/null || true"
-          },
-          {
-            "type": "command",
             "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && awk '/^## 着手前/{a=1} /^## 会話に出すもの/{b=1} /^## 人が決める/{b=0} (!a||b){print}' .claude/skills/work-style/SKILL.md 2>/dev/null || true"
           },
           {
