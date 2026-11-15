@@ -59,7 +59,6 @@ mechanisms:
   - subject: "ピアノ"
     how: "演奏者から見て右側が開くため、演奏会場では客席に向かって音を発するように、客席から向かって左側に鍵盤が置かれる"
     source: "https://ja.wikipedia.org/wiki/ピアノ"
-    aspect: 見た目
     domains: [physical, creation]
   - subject: "ピアノ"
     how: "ピアノで一切発音せず、ペダルの踏み込み具合や鍵を無音で押し込むことによって他の楽器に共鳴させる奏法もある"
@@ -82,7 +81,6 @@ mechanisms:
   - subject: "ラウンドアバウト"
     how: "自転車道を分けることで環道の幅員を削減できるほか、横断歩道の手前では躊躇なく速度を落とすことができる"
     source: "https://ja.wikipedia.org/wiki/ラウンドアバウト"
-    aspect: 境界
     domains: [city, rule]
   - subject: "人工透析"
     how: "血液の体外への循環中に血液が凝固することを防ぐ目的で、抗凝固薬を持続注入する"
@@ -100,7 +98,6 @@ mechanisms:
   - subject: "冷蔵庫"
     how: "新品および使用中の冷蔵庫を車に積んで運ぶ場合、圧縮機の故障を防ぐため「縦積みする」よう指示されている"
     source: "https://ja.wikipedia.org/wiki/冷蔵庫"
-    aspect: やり直しのきかない部分
     domains: [daily, physical]
   - subject: "冷蔵庫"
     how: "使用済み冷蔵庫を廃棄する場合、庫内への幼児閉じ込め事故を防ぐためドアパッキンを必ず外しておく"
@@ -164,7 +161,6 @@ mechanisms:
   - subject: "消化"
     how: "中には、自身には消化できないものを分解するために、微生物などを消化管内に共生させている動物もいる"
     source: "https://ja.wikipedia.org/wiki/消化"
-    aspect: 手数
     domains: [nature, physical]
   - subject: "消防"
     how: "アウグストゥスの消防の人員は火事を知らせるために、動くと音が出る金具が付いた制服を着ていた"
@@ -291,7 +287,6 @@ mechanisms:
   - subject: "トランペット"
     how: "異なる種類の弱音器に付け換えることによって音色を瞬時に変化させることもできる"
     source: "https://ja.wikipedia.org/wiki/トランペット"
-    aspect: 待ち時間
     domains: [physical, creation]
   - subject: "トランペット"
     how: "4番バルブがある楽器では、これを押すことで全音2つ分音高が低くなる"
@@ -396,7 +391,6 @@ mechanisms:
   - subject: "滑車"
     how: "フランジと溝を持たないドラム型プーリーの場合、平ベルトをその中央に保つためにやや凸面にしておくことが多い"
     source: "https://ja.wikipedia.org/wiki/滑車"
-    aspect: 初期状態
     domains: [physical, structure]
   - subject: "火消"
     how: "江戸市中の再建では、大名屋敷・旗本屋敷や寺社の一部を郊外に移転させ、延焼を防ぐための火除地を確保した"
@@ -406,7 +400,6 @@ mechanisms:
   - subject: "献血"
     how: "成分献血は回復に時間を要する赤血球を献血者に戻すため、全血献血に比べてより多くの血小板や血漿を採血可能となる"
     source: "https://ja.wikipedia.org/wiki/献血"
-    aspect: 一番遅いところ
     domains: [trust, social]
   - subject: "献血"
     how: "エイズ検査目的の献血を防ぐためにHIVは異常が認められても通知されない"
@@ -437,7 +430,6 @@ mechanisms:
   - subject: "聴診器"
     how: "チェストピースを押さえる圧を調節することで、高調音と低調音を聞き分ける機能をもたせたダイアフラムもある"
     source: "https://ja.wikipedia.org/wiki/聴診器"
-    aspect: 手数
     domains: [physical, information]
   - subject: "自動列車停止装置"
     how: "国鉄ATSのB型と同様にレールに常に電流を流し、電流を切ることによって信号を送っている"
@@ -456,7 +448,6 @@ mechanisms:
   - subject: "自転車"
     how: "クランクを逆転させることで作動するコースターブレーキと呼ばれるものも一部で採用されている"
     source: "https://ja.wikipedia.org/wiki/自転車"
-    aspect: 手数
     domains: [physical, daily]
   - subject: "落語"
     how: "視線や体勢の角度を変えることで、登場人物の間の遠近や位置関係を表現することもできる"
@@ -560,7 +551,6 @@ mechanisms:
   - subject: "洗濯機"
     how: "最近では、液体を封入した環を使い、それを脱水槽と同時に回すことで全体としてバランスが取れるようにしていることが多い"
     source: "https://ja.wikipedia.org/wiki/洗濯機"
-    aspect: 例外の扱い
     domains: [daily, physical]
   - subject: "洗濯機"
     how: "洗濯物と水を球形の金属製洗濯槽に密閉して人力で回転させることで攪拌し洗浄する"
@@ -577,10 +567,8 @@ mechanisms:
   - subject: "能"
     how: "能の作者は典拠の筋をそのまま再現するのではなく、語る人物や描く時間を選び直して一曲を構成した"
     source: "https://ja.wikipedia.org/wiki/能"
-    aspect: 説明が一番長くなる部分
     domains: [culture, creation]
   - subject: "花札"
     how: "不正を疑われないように、ひとりで札を混ぜて配ったりせず、3人の分担作業で行うことを推奨する"
     source: "https://ja.wikipedia.org/wiki/花札"
-    aspect: 手数
     domains: [play, trust]
