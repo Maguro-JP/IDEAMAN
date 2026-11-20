@@ -6,6 +6,8 @@
     python -m ideaman doctor          設定を診断する
     python -m ideaman diversity       リズムの健康度を見る
     python -m ideaman chain <id>      連鎖を辿る
+    python -m ideaman mechanisms <f>  文章から「仕組みの一文」を抜く
+    python -m ideaman harvest         ウィキペディアから一文の候補を採る
 """
 
 from __future__ import annotations
@@ -15,7 +17,8 @@ import logging
 import sys
 from pathlib import Path
 
-from . import diversity, doctor, harvest, service
+from . import diversity, doctor, harvest, mechanism, service, sources
+from .engine.lexicon import DATA_DIR
 from .notify import ConsoleNotifier, QueueNotifier
 from .store import Store, clean_material
 from .worker import DEFAULT_STOCK, TICK_SECONDS, Worker
@@ -32,6 +35,8 @@ def _configure_logging(verbose: bool) -> None:
 def cmd_idea(args: argparse.Namespace, store: Store) -> int:
     idea = service.receive_idea(store, domain=args.domain, use_llm=not args.no_llm)
     print(f"\n  {idea.text}\n")
+    if idea.reference:
+        print(f"  出典: {idea.reference}")
     theme = store.theme(idea.theme_id) if idea.theme_id else None
     label = theme.name if theme else "テーマなし"
     print(f"  #{idea.id}  {label}  在庫 {store.stock_count()}")
@@ -142,6 +147,108 @@ def cmd_theme(args: argparse.Namespace, store: Store) -> int:
     return 0
 
 
+def cmd_mechanisms(args: argparse.Namespace, store: Store) -> int:
+    """文章から「仕組みの一文」を抜いて見せる。
+
+    取れ高と誤検出は**実際の文章に当てないと分からない**ので、測るための
+    入口をここに置く。`-` を渡せば標準入力から読むので、取ってきた記事を
+    そのまま流し込める:
+
+        curl -s "https://.../api/rest_v1/page/html/改札" | ideaman mechanisms -
+    """
+    import sys
+
+    texts: list[tuple[str, str]] = []
+    for path in args.paths:
+        if path == "-":
+            texts.append((args.subject or "標準入力", sys.stdin.read()))
+        else:
+            file = Path(path)
+            if not file.is_file():
+                print(f"{path} が読めません", file=sys.stderr)
+                return 1
+            texts.append((args.subject or file.stem, file.read_text(errors="replace")))
+
+    from collections import Counter
+
+    sentences = found = 0
+    why: Counter[str] = Counter()
+    for subject, text in texts:
+        pieces = mechanism.split_sentences(text)
+        got = mechanism.extract(subject, text, limit=args.limit)
+        sentences += len(pieces)
+        found += len(got)
+        for piece in pieces:
+            reason = mechanism.reject_reason(piece)
+            if reason:
+                why[reason] += 1
+        print(f"--- {subject}: 文 {len(pieces)} / 仕組み {len(got)}")
+        for item in got:
+            print(f"    {item.how}")
+
+    rate = found / sentences if sentences else 0.0
+    print(f"\n文 {sentences} / 仕組み {found}（{rate:.1%}）")
+    print("落ちた理由（多い順）:")
+    for reason, count in why.most_common():
+        print(f"    {count:6d}  {reason}")
+    print("\n通ったものを全部読んで、仕組みでないものが混ざっていないか見ます。")
+    print("取れ高が低いときは、落ちた理由の上位が絞りすぎていないか見ます。")
+    return 0
+
+
+def cmd_harvest(args: argparse.Namespace, store: Store) -> int:
+    """日本語版ウィキペディアから、仕組みの一文の候補を採る。
+
+    すでに採れた記事（`mechanisms.yaml` の `source`）のリンク先を読み、
+    抽出器を通った一文のうち、まだ持っていないものを YAML で出す。
+    **出すのは候補で、生成には使われない。** 抽出器を通っても 2 割は仕組み
+    ではないので、読んで選んだ文だけを手で `mechanisms.yaml` に足す。
+    """
+    import random
+
+    import yaml
+
+    if args.count < 1:
+        print("--count は 1 以上にします", file=sys.stderr)
+        return 1
+    saved_path = Path(args.mechanisms) if args.mechanisms else DATA_DIR / "mechanisms.yaml"
+    if not saved_path.is_file():
+        print(f"{saved_path} が読めません（辿る起点の記事がここにあります）", file=sys.stderr)
+        return 1
+    saved = (yaml.safe_load(saved_path.read_text(encoding="utf-8")) or {}).get("mechanisms") or []
+    if not any(sources.title_from_url(item.get("source", "")) for item in saved):
+        print(
+            f"{saved_path} にウィキペディアの記事が無いので、辿る起点がありません",
+            file=sys.stderr,
+        )
+        return 1
+    visited = Path(args.visited) if args.visited else DATA_DIR / "mechanism-visited.txt"
+
+    result = sources.collect(
+        args.count,
+        wiki=sources.Wikipedia(),
+        saved=saved,
+        visited_path=visited,
+        rng=random.Random(args.seed),
+        progress=(lambda line: print(line, file=sys.stderr)) if args.verbose else None,
+    )
+    document = sources.to_yaml(result.candidates)
+    if args.out:
+        Path(args.out).write_text(document, encoding="utf-8")
+        print(f"候補を {args.out} に書きました")
+        print("\n".join(result.report()))
+    else:
+        # 標準出力をそのまま YAML として読めるように、数字はコメントで付ける。
+        print(document, end="")
+        print("\n".join(f"# {line}" for line in result.report()))
+    if result.articles == 0:
+        # 1 記事も読めなかったのに 0 を返すと、候補が無かったように見える。
+        why = result.failed[0][1] if result.failed else "読んでいない記事が残っていない"
+        print(f"記事を 1 つも読めませんでした: {why}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace, store: Store) -> int:
     """設定の健康診断。
 
@@ -235,6 +342,30 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[common],
     )
     p_doc.set_defaults(func=cmd_doctor)
+
+    p_mech = sub.add_parser(
+        "mechanisms", help="文章から「仕組みの一文」を抜く", parents=[common]
+    )
+    p_mech.add_argument("paths", nargs="+", help="ファイル。`-` で標準入力")
+    p_mech.add_argument("--subject", help="何の仕組みか（既定はファイル名）")
+    p_mech.add_argument("--limit", type=int, default=50, help="1文書から採る上限")
+    p_mech.set_defaults(func=cmd_mechanisms)
+
+    p_harvest = sub.add_parser(
+        "harvest",
+        help="ウィキペディアから「仕組みの一文」の候補を採る（読んで選ぶ前の段）",
+        parents=[common],
+    )
+    p_harvest.add_argument("--count", type=int, default=20, help="読む記事の数（既定 %(default)s）")
+    p_harvest.add_argument("--out", metavar="FILE", help="候補の YAML の書き先（既定は標準出力）")
+    p_harvest.add_argument(
+        "--mechanisms", metavar="FILE", help="保存済みの一文（既定は同梱の mechanisms.yaml）"
+    )
+    p_harvest.add_argument(
+        "--visited", metavar="FILE", help="読んだ題の記録（既定は同梱の mechanism-visited.txt）"
+    )
+    p_harvest.add_argument("--seed", type=int, help="題を選ぶ乱数の種（同じ並びで選び直すとき）")
+    p_harvest.set_defaults(func=cmd_harvest)
 
     p_div = sub.add_parser("diversity", help="リズムの健康度を見る", parents=[common])
     p_div.add_argument("--limit", type=int, default=500)

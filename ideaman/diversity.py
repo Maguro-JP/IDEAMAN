@@ -95,10 +95,22 @@ def measure(store: Store, limit: int = 500) -> Health:
     health.kept = verdicts["kept"]
     health.unjudged = verdicts[None]
 
+    # 被覆率の分子と分母からは、仕組み（`mechanisms`）を外す。外から採って
+    # 増やし続けるプールで、型の 1 つからしか引かれないので、入れると
+    # 「少数の語に収束していないか」が読めなくなる（128 件を足しただけで、
+    # 10 日ぶんの被覆率が 4 割を切った）。
+    #
+    # **上位集中度のほうには入れる。** こちらは「引いた語のうち上位 5 語が
+    # 占める割合」で、仕組みを引いた分を分母から抜くと、材料の割合だけが
+    # 上がって見える。抜いていたとき、平均が 0.310 から 0.323 に上がり、
+    # 120 回に 3 回が閾値の 0.35 を超えて CI が落ちた。
     term_counts: Counter = Counter()
+    drawn_all: Counter = Counter()
     for row in rows:
-        for _, term in json.loads(row["seed_json"])["terms"]:
-            term_counts[term] += 1
+        for pool, term in json.loads(row["seed_json"])["terms"]:
+            drawn_all[(pool, term)] += 1
+            if pool != "mechanisms":
+                term_counts[term] += 1
 
     lexicon = default_lexicon()
     # 材料も語彙のうち。分母に入れないと 100% を超える（実際 101% が出た）。
@@ -106,11 +118,13 @@ def measure(store: Store, limit: int = 500) -> Health:
         row["term"]
         for row in store.conn.execute("SELECT DISTINCT term FROM theme_terms")
     }
-    vocabulary = sum(len(terms) for terms in lexicon.pools.values()) + len(materials)
+    vocabulary = sum(
+        len(terms) for name, terms in lexicon.pools.items() if name != "mechanisms"
+    ) + len(materials)
     health.coverage = len(term_counts) / vocabulary if vocabulary else 0.0
-    drawn = sum(term_counts.values())
+    drawn = sum(drawn_all.values())
     health.top_share = (
-        sum(n for _, n in term_counts.most_common(5)) / drawn if drawn else 0.0
+        sum(n for _, n in drawn_all.most_common(5)) / drawn if drawn else 0.0
     )
 
     return health

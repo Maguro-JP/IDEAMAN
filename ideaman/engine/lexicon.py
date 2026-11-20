@@ -43,6 +43,12 @@ class Term:
     term: str
     domains: tuple[str, ...] = ()
     kind: str = "noun"
+    #: `mechanisms` でだけ使う。何をどうしているかの一文と、その出典。
+    #: 裸の語（改札）ではなく仕組み（脇へ出して個別に捌く）を運ぶための場所。
+    how: str = ""
+    source: str = ""
+    #: その仕組みが、どの側面の話か。読んで付けた判定（形では決められない）。
+    aspect: str = ""
 
 
 @dataclass(frozen=True)
@@ -70,6 +76,34 @@ class Lexicon:
         return tuple(t for t in self.templates if t.tone == tone)
 
 
+def load_mechanisms(path: Path | None = None) -> tuple[Term, ...]:
+    """外の世界から採った「仕組みの一文」を読む。
+
+    **無くてもよい。** 採取がまだなら空で、仕組みを使うテンプレートは
+    選ばれないだけ。語彙プールと違って、空でも起動を止めない。
+    """
+    path = path or DATA_DIR / "mechanisms.yaml"
+    if not path.is_file():
+        return ()
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    # 一番上は `mechanisms:` のキー（lexicon.yaml の `concepts:` と同じ形）。
+    raw = raw.get("mechanisms") or []
+    return tuple(
+        Term(
+            term=item["subject"],
+            domains=tuple(item.get("domains") or ()),
+            how=str(item["how"]).strip().rstrip("。"),
+            source=item.get("source", ""),
+            aspect=item.get("aspect", ""),
+        )
+        for item in raw
+        # **側面の付いていない一文は引かない。** 物の構造の話（閘門の浮函、
+        # 滑車）は材料に移しにくく、的も名指しできない。ファイルには残す——
+        # 読み直して付ければ引かれるようになる。
+        if item.get("subject") and item.get("how") and item.get("aspect")
+    )
+
+
 def _load_terms(raw: list[dict]) -> tuple[Term, ...]:
     return tuple(
         Term(
@@ -93,6 +127,7 @@ def load_lexicon(
     for name, terms in pools.items():
         if not terms:
             raise ValueError(f"語彙プール {name} が空です: {lexicon_path}")
+    pools["mechanisms"] = load_mechanisms()
 
     raw_templates = yaml.safe_load(templates_path.read_text(encoding="utf-8"))
     templates = tuple(
